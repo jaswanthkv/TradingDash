@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.kite_token.json
+scans/
