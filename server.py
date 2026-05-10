@@ -22,7 +22,7 @@ Endpoints:
   GET  /api/kite/orders        — today's orders
   GET  /api/kite/order/{id}    — single order status
 """
-import json, datetime, warnings, asyncio
+import json, os, datetime, warnings, asyncio
 from concurrent.futures import ThreadPoolExecutor
 warnings.filterwarnings("ignore")
 
@@ -75,25 +75,28 @@ def get_df(ticker: str, days: int = 120) -> pd.DataFrame | None:
 
 
 def enrich(pos: dict, df: pd.DataFrame) -> dict:
-    close      = df["Close"].squeeze()
-    ema5       = close.ewm(span=5,  adjust=False).mean()
-    ema10      = close.ewm(span=10, adjust=False).mean()
-    sma20      = close.rolling(20).mean()
-    cmp        = float(close.iloc[-1])
-    last_ema5  = float(ema5.iloc[-1])
-    above_now  = cmp > last_ema5
-    above_prev = float(close.iloc[-2]) > float(ema5.iloc[-2])
+    close        = df["Close"].squeeze()
+    ema5         = close.ewm(span=5,  adjust=False).mean()
+    ema10        = close.ewm(span=10, adjust=False).mean()
+    sma20        = close.rolling(20).mean()
+    cmp          = float(close.iloc[-1])
+    last_ema5    = float(ema5.iloc[-1])
+    last_ema10   = float(ema10.iloc[-1])
 
-    if above_now:
-        urgency, status = "safe",    "5MA Safe"
-    elif above_prev:
-        urgency, status = "warning", "Warning"
+    below_ema10_now  = cmp < last_ema10
+    below_ema10_prev = float(close.iloc[-2]) < float(ema10.iloc[-2])
+    below_ema5_now   = cmp < last_ema5
+
+    if below_ema10_now and below_ema10_prev:
+        urgency, status = "exit",    "10MA Break"
+    elif below_ema5_now:
+        urgency, status = "warning", "Below 5MA"
     else:
-        urgency, status = "exit",    "5MA Break"
+        urgency, status = "safe",    "10MA Safe"
 
     days_above = 0
     for i in range(len(close) - 1, -1, -1):
-        if float(close.iloc[i]) > float(ema5.iloc[i]):
+        if float(close.iloc[i]) > float(ema10.iloc[i]):
             days_above += 1
         else:
             break
@@ -103,7 +106,7 @@ def enrich(pos: dict, df: pd.DataFrame) -> dict:
     atr        = engine.compute_atr(df)
     init_stop  = pos.get("initial_stop") or (entry - 2 * atr)
     risk       = max(entry - init_stop, 0.01)
-    trail_stop = max(init_stop, last_ema5)
+    trail_stop = max(init_stop, last_ema10)
     today_open = float(df["Open"].squeeze().iloc[-1])
     holding    = (datetime.date.today() -
                   datetime.date.fromisoformat(pos["entry_date"])).days
@@ -166,10 +169,15 @@ def api_portfolio():
     enriched = []
     for pos in engine.load_positions():
         df = get_df(pos["ticker"])
-        if df is not None and len(df) >= 10:
-            enriched.append(enrich(pos, df))
+        enriched.append(enrich(pos, df) if (df is not None and len(df) >= 10)
+                        else _placeholder(pos))
     if not enriched:
-        return {}
+        return {
+            "pct_invested": 0, "invested_inr": 0, "capital_inr": CAPITAL,
+            "day_pnl": 0, "day_pnl_pct": 0, "total_pnl": 0, "total_pnl_pct": 0,
+            "open_risk_inr": 0, "open_risk_pct": 0, "locked_profit": 0,
+            "n_positions": 0, "exits_pending": 0,
+        }
 
     invested      = sum(p["alloc_inr"]  for p in enriched)
     day_pnl       = sum(p["day_pnl"]    for p in enriched)
@@ -205,7 +213,8 @@ def api_chart(ticker: str, days: int = 60):
         return {"candles": [], "ema5": []}
     df    = df.tail(days)
     close = df["Close"].squeeze()
-    ema5  = close.ewm(span=5, adjust=False).mean()
+    ema5  = close.ewm(span=5,  adjust=False).mean()
+    ema10 = close.ewm(span=10, adjust=False).mean()
 
     candles = [{"time": ts.strftime("%Y-%m-%d"),
                 "open":  round(float(r["Open"]),  2),
@@ -214,10 +223,12 @@ def api_chart(ticker: str, days: int = 60):
                 "close": round(float(r["Close"]), 2)}
                for ts, r in df.iterrows()]
 
-    ema5_data = [{"time": ts.strftime("%Y-%m-%d"), "value": round(float(v), 2)}
-                 for ts, v in ema5.items()]
+    ema5_data  = [{"time": ts.strftime("%Y-%m-%d"), "value": round(float(v), 2)}
+                  for ts, v in ema5.items()]
+    ema10_data = [{"time": ts.strftime("%Y-%m-%d"), "value": round(float(v), 2)}
+                  for ts, v in ema10.items()]
 
-    return {"candles": candles, "ema5": ema5_data}
+    return {"candles": candles, "ema5": ema5_data, "ema10": ema10_data}
 
 # ── POST /api/scan ────────────────────────────────────────────────────────────
 
@@ -390,6 +401,15 @@ def api_kite_sell(req: SellRequest):
     except Exception as exc:
         raise HTTPException(500, str(exc))
 
+@app.get("/api/kite/holdings")
+def api_kite_holdings():
+    if not _KITE:
+        return []
+    try:
+        return kite_orders.get_holdings()
+    except Exception:
+        return []
+
 @app.get("/api/kite/orders")
 def api_kite_orders():
     if not _KITE:
@@ -409,10 +429,295 @@ def api_kite_order_status(order_id: str):
     except Exception as exc:
         raise HTTPException(500, str(exc))
 
+# ── Options endpoints ─────────────────────────────────────────────────────────
+
+@app.get("/api/options/expiries/{symbol}")
+def api_opt_expiries(symbol: str):
+    _kite_guard()
+    try:
+        import options as opt
+        return opt.get_expiries(symbol.upper())
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+@app.get("/api/options/chain/{symbol}/{expiry}")
+def api_opt_chain(symbol: str, expiry: str):
+    _kite_guard()
+    try:
+        import options as opt
+        return opt.get_chain(symbol.upper(), expiry)
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+# ── GET /api/health ───────────────────────────────────────────────────────────
+
+@app.get("/api/health")
+def api_health():
+    import importlib, config
+    importlib.reload(config)
+    return {
+        "anthropic": bool(config.ANTHROPIC_API_KEY),
+        "kite_key":  bool(config.KITE_API_KEY),
+        "kite_secret": bool(config.KITE_API_SECRET),
+        "ready":     bool(config.ANTHROPIC_API_KEY),
+    }
+
+# ── POST /api/setup ───────────────────────────────────────────────────────────
+
+class SetupRequest(BaseModel):
+    anthropic_key: str
+    kite_key:      str = ""
+    kite_secret:   str = ""
+    capital:       int = 0
+
+@app.post("/api/setup")
+def api_setup(req: SetupRequest):
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    lines = []
+    if req.anthropic_key.strip():
+        lines.append(f"ANTHROPIC_API_KEY={req.anthropic_key.strip()}")
+    if req.kite_key.strip():
+        lines.append(f"KITE_API_KEY={req.kite_key.strip()}")
+    if req.kite_secret.strip():
+        lines.append(f"KITE_API_SECRET={req.kite_secret.strip()}")
+    if req.capital > 0:
+        lines.append(f"CAPITAL={req.capital}")
+    with open(env_path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    # apply to running process immediately
+    for line in lines:
+        k, v = line.split("=", 1)
+        os.environ[k] = v
+    import importlib, config, engine as eng
+    importlib.reload(config)
+    importlib.reload(eng)
+    return {"status": "saved"}
+
+# ── Backtest ──────────────────────────────────────────────────────────────────
+
+_BT_CACHE_FILE    = os.path.join(os.path.dirname(__file__), ".bt_cache_india.json")
+_BT_US_CACHE_FILE = os.path.join(os.path.dirname(__file__), ".bt_cache_us.json")
+
+def _load_cache(path: str) -> dict:
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_cache(path: str, data: dict):
+    try:
+        with open(path, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+_backtest_cache: dict = _load_cache(_BT_CACHE_FILE)
+_backtest_running = False
+
+
+class BacktestParams(BaseModel):
+    m: int     = 8
+    x: int     = 3
+    years: int = 10
+
+
+@app.post("/api/backtest/run")
+async def run_backtest_endpoint(params: BacktestParams):
+    """
+    Launch a backtest in the thread pool.
+    Results cached until next run.
+    """
+    global _backtest_running
+    if _backtest_running:
+        raise HTTPException(status_code=409, detail="Backtest already running")
+
+    import backtest as bt
+
+    def _run():
+        global _backtest_running, _backtest_cache
+        _backtest_running = True
+        try:
+            result = bt.run_backtest(m=params.m, x=params.x, years=params.years)
+            _backtest_cache = result
+            _save_cache(_BT_CACHE_FILE, result)
+            return result
+        finally:
+            _backtest_running = False
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(_executor, _run)
+    return result
+
+
+@app.get("/api/backtest/result")
+def get_backtest_result():
+    if not _backtest_cache:
+        raise HTTPException(status_code=404, detail="No backtest result yet — run one first")
+    return _backtest_cache
+
+
+@app.get("/api/backtest/status")
+def get_backtest_status():
+    return {
+        "running": _backtest_running,
+        "has_result": bool(_backtest_cache),
+    }
+
+
+@app.get("/api/backtest/current-pf")
+async def get_current_pf(m: int = 8, x: int = 3, years: int = 10):
+    """Current month's portfolio with MTD and last-day performance."""
+    import backtest as bt
+    loop   = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor, lambda: bt.get_current_pf(m=m, x=x, years=years)
+    )
+    return result
+
+
+@app.get("/api/backtest/rebalance-plan")
+async def rebalance_plan(
+    m: int = 8, x: int = 3, years: int = 10, capital: float = 0,
+    exclude: str = "",   # comma-separated symbols, e.g. "ANTHEM,NIFTYBEES"
+):
+    """Compare pflio target vs Kite demat. Returns SELL/BUY/HOLD actions."""
+    if not _KITE:
+        raise HTTPException(status_code=503, detail="Kite not available")
+    import backtest as bt
+    exclude_list = [s.strip() for s in exclude.split(",") if s.strip()]
+    loop   = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor,
+        lambda: bt.get_rebalance_plan(m=m, x=x, years=years, capital=capital,
+                                      exclude_tickers=exclude_list)
+    )
+    return result
+
+
+class RebalanceExecuteBody(BaseModel):
+    sells:   list[dict]
+    buys:    list[dict]
+    dry_run: bool = True
+
+
+@app.post("/api/backtest/rebalance-execute")
+async def rebalance_execute(body: RebalanceExecuteBody):
+    """Place CNC sell then buy orders for the rebalance."""
+    if not _KITE:
+        raise HTTPException(status_code=503, detail="Kite not available")
+    import backtest as bt
+    loop   = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor,
+        lambda: bt.execute_rebalance(body.sells, body.buys, dry_run=body.dry_run)
+    )
+    return result
+
+
+
+
+# ── US Backtest (NASDAQ 100) ──────────────────────────────────────────────────
+
+_us_backtest_cache: dict = _load_cache(_BT_US_CACHE_FILE)
+_us_backtest_running = False
+
+
+@app.post("/api/backtest-us/run")
+async def run_us_backtest(params: BacktestParams):
+    global _us_backtest_running
+    if _us_backtest_running:
+        raise HTTPException(status_code=409, detail="US backtest already running")
+    import backtest_us as bt_us
+
+    def _run():
+        global _us_backtest_running, _us_backtest_cache
+        _us_backtest_running = True
+        try:
+            result = bt_us.run_backtest(m=params.m, x=params.x, years=params.years)
+            _us_backtest_cache = result
+            _save_cache(_BT_US_CACHE_FILE, result)
+            return result
+        finally:
+            _us_backtest_running = False
+
+    loop   = asyncio.get_event_loop()
+    result = await loop.run_in_executor(_executor, _run)
+    return result
+
+
+@app.get("/api/backtest-us/result")
+def get_us_backtest_result():
+    if not _us_backtest_cache:
+        raise HTTPException(status_code=404, detail="No US backtest result — run one first")
+    return _us_backtest_cache
+
+
+@app.get("/api/backtest-us/status")
+def get_us_backtest_status():
+    return {"running": _us_backtest_running, "has_result": bool(_us_backtest_cache)}
+
+
+@app.get("/api/backtest-us/current-pf")
+async def get_us_current_pf(m: int = 10, x: int = 3, years: int = 10):
+    import backtest_us as bt_us
+    loop   = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor, lambda: bt_us.get_current_pf(m=m, x=x, years=years)
+    )
+    return result
+
+
+# ── Options Scorecard ─────────────────────────────────────────────────────────
+
+@app.get("/api/options/scorecard")
+def api_options_scorecard(symbol: str = "NIFTY", expiry1: str = "", expiry2: str = ""):
+    _kite_guard()
+    try:
+        from options_scorecard import run_scorecard
+        result = run_scorecard(
+            symbol=symbol,
+            expiry1=expiry1 or None,
+            expiry2=expiry2 or None,
+        )
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── Weekly Report Card ────────────────────────────────────────────────────────
+
+@app.get("/api/report/data")
+async def api_report_data(market: str = "india"):
+    """Compile all data for the weekly social media report card."""
+    import report as rpt
+    if market == "us":
+        import backtest_us as bt
+        bt_result = _us_backtest_cache
+        loop   = asyncio.get_event_loop()
+        pf     = await loop.run_in_executor(_executor, lambda: bt.get_current_pf())
+    else:
+        import backtest as bt
+        bt_result = _backtest_cache
+        loop   = asyncio.get_event_loop()
+        pf     = await loop.run_in_executor(_executor, lambda: bt.get_current_pf())
+
+    data = await loop.run_in_executor(
+        _executor, lambda: rpt.generate_report_data(market, bt_result, pf)
+    )
+    return data
+
+
+@app.get("/report", response_class=HTMLResponse)
+def report_page(market: str = "india"):
+    path = os.path.join(os.path.dirname(__file__), "report.html")
+    return open(path).read() if os.path.exists(path) else "<h1>report.html not found</h1>"
+
+
 # ── GET / — serve dashboard ───────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 def root():
-    import os
     path = os.path.join(os.path.dirname(__file__), "index.html")
     return open(path).read() if os.path.exists(path) else "<h1>index.html not found</h1>"

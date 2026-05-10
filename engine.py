@@ -66,7 +66,7 @@ def compute_atr(df: pd.DataFrame, period: int = 14) -> float:
 
 
 def compute_stage(df: pd.DataFrame) -> tuple[str, int]:
-    close     = df["Close"]
+    close     = df["Close"].squeeze().dropna()
     sma30     = close.rolling(30).mean().iloc[-1]
     sma150    = close.rolling(150).mean().iloc[-1]
     sma200    = close.rolling(200).mean().iloc[-1]
@@ -100,39 +100,44 @@ def compute_rs_scores(price_data: dict[str, pd.DataFrame]) -> dict[str, float]:
 
 
 def compute_5ma_status(df: pd.DataFrame, entry_price: float | None = None) -> dict:
-    close = df["Close"].squeeze()
-    ema5  = close.ewm(span=5,  adjust=False).mean()
-    ema10 = close.ewm(span=10, adjust=False).mean()
-    sma20 = close.rolling(20).mean()
+    close  = df["Close"].squeeze()
+    ema5   = close.ewm(span=5,  adjust=False).mean()
+    ema10  = close.ewm(span=10, adjust=False).mean()
+    sma20  = close.rolling(20).mean()
 
-    cmp        = float(close.iloc[-1])
-    last_ema5  = float(ema5.iloc[-1])
-    above_now  = cmp > last_ema5
-    above_prev = float(close.iloc[-2]) > float(ema5.iloc[-2])
+    cmp          = float(close.iloc[-1])
+    last_ema5    = float(ema5.iloc[-1])
+    last_ema10   = float(ema10.iloc[-1])
 
-    if above_now:
-        urgency, status = "safe",    "5MA Safe"
-    elif above_prev:
-        urgency, status = "warning", "Warning"
+    # Exit: 2 consecutive closes below 10EMA
+    below_ema10_now  = cmp < last_ema10
+    below_ema10_prev = float(close.iloc[-2]) < float(ema10.iloc[-2])
+    # Warning: below 5EMA but not yet 2 closes below 10EMA
+    below_ema5_now   = cmp < last_ema5
+
+    if below_ema10_now and below_ema10_prev:
+        urgency, status = "exit",    "10MA Break"
+    elif below_ema5_now:
+        urgency, status = "warning", "Below 5MA"
     else:
-        urgency, status = "exit",    "5MA Break"
+        urgency, status = "safe",    "10MA Safe"
 
     days_above = 0
     for i in range(len(close) - 1, -1, -1):
-        if float(close.iloc[i]) > float(ema5.iloc[i]):
+        if float(close.iloc[i]) > float(ema10.iloc[i]):
             days_above += 1
         else:
             break
 
     out = dict(urgency=urgency, five_ma_status=status, days_above_5ma=days_above,
-               ema5=round(last_ema5, 2), ema10=round(float(ema10.iloc[-1]), 2),
+               ema5=round(last_ema5, 2), ema10=round(last_ema10, 2),
                sma20=round(float(sma20.iloc[-1]), 2), current_price=round(cmp, 2))
 
     if entry_price:
-        atr           = compute_atr(df)
-        init_stop     = entry_price - 2 * atr
-        risk          = max(entry_price - init_stop, 0.01)
-        trail_stop    = max(init_stop, last_ema5)
+        atr        = compute_atr(df)
+        init_stop  = entry_price - 2 * atr
+        risk       = max(entry_price - init_stop, 0.01)
+        trail_stop = max(init_stop, last_ema10)
         out.update(
             initial_stop  = round(init_stop, 2),
             trailing_stop = round(trail_stop, 2),
@@ -155,7 +160,7 @@ def _vcp_contractions(prices: np.ndarray) -> int:
 class EntrySignalEngine:
     def __init__(self, df: pd.DataFrame):
         self.df     = df
-        self.close  = df["Close"].squeeze()
+        self.close  = df["Close"].squeeze().dropna()
         self.high   = df["High"].squeeze()
         self.low    = df["Low"].squeeze()
         self.volume = df["Volume"].squeeze()
@@ -228,21 +233,41 @@ class EntrySignalEngine:
         weekly = self.df.resample("W").agg(
             {"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}
         ).dropna()
-        if len(weekly) < 30:
+        if len(weekly) < 10:
             return False
         close = weekly["Close"].squeeze()
-        ma10w = close.rolling(10).mean()
-        ma30w = close.rolling(30).mean()
+        ma10w = close.rolling(min(10, len(close))).mean()
         last  = float(close.iloc[-1])
+        # Must be above 10-week MA and MA must be rising over last 4 weeks
         return bool(last > float(ma10w.iloc[-1]) and
-                    float(ma10w.iloc[-1]) > float(ma10w.iloc[-4]) and
-                    last > float(ma30w.iloc[-1]))
+                    float(ma10w.iloc[-1]) > float(ma10w.iloc[-min(4, len(ma10w)-1)]))
+
+    def stage2_reclaim(self) -> bool:
+        ema5  = self.close.ewm(span=5,  adjust=False).mean()
+        ema10 = self.close.ewm(span=10, adjust=False).mean()
+        sma20 = self.close.rolling(20).mean()
+        sma50 = self.close.rolling(50).mean()
+        stack  = ema5.iloc[-1] > ema10.iloc[-1] > sma20.iloc[-1] > sma50.iloc[-1]
+        above  = self.last > ema5.iloc[-1]
+        rising = sma20.iloc[-1] > sma20.iloc[-10]
+        # Removed tight constraint — allow up to 10% above EMA5
+        return bool(stack and above and rising)
 
     def overextended(self) -> bool:
         ema20 = self.close.ewm(span=20).mean().iloc[-1]
         ema50 = self.close.ewm(span=50).mean().iloc[-1]
-        return ((self.last - ema20) / ema20 * 100 > 12 or
-                (self.last - ema50) / ema50 * 100 > 18)
+        return ((self.last - ema20) / ema20 * 100 > 15 or
+                (self.last - ema50) / ema50 * 100 > 22)
+
+    def _trending_momentum(self) -> bool:
+        """Fallback: Stage2 stock above rising EMAs — no specific pattern required."""
+        ema10 = self.close.ewm(span=10, adjust=False).mean()
+        ema20 = self.close.ewm(span=20, adjust=False).mean()
+        sma50 = self.close.rolling(50).mean()
+        return bool(
+            self.last > float(ema10.iloc[-1]) > float(ema20.iloc[-1]) > float(sma50.iloc[-1]) and
+            float(ema10.iloc[-1]) > float(ema10.iloc[-5])
+        )
 
     def classify(self) -> dict | None:
         if len(self.df) < 100 or self.overextended():
@@ -258,6 +283,7 @@ class EntrySignalEngine:
         br_flag,  br_vol           = self.breakout(pivot)
         s2_flag                    = self.stage2_reclaim()
         vcp_flag, dist_to_pivot    = self.vcp_ready(pivot)
+        mom_flag                   = self._trending_momentum()
 
         if pp_flag and stage_name == "Stage2":
             sig, conv = "POCKET_PIVOT",       "High"
@@ -269,6 +295,8 @@ class EntrySignalEngine:
             sig, conv = "VCP_BREAKOUT_READY", "Medium"
         elif s2_flag:
             sig, conv = "STAGE2_RECLAIM",     "Medium"
+        elif mom_flag and stage_name in ("Stage1", "Stage2"):
+            sig, conv = "TRENDING_MOMENTUM",  "Medium"
         else:
             return None
 
@@ -434,16 +462,27 @@ OUTPUT — valid JSON only, no markdown fences
 }"""
 
 
-def call_claude(scorecard: list[dict], regime: dict) -> dict:
-    client   = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+def call_claude(scorecard: list[dict], regime: dict,
+                current_positions: list[dict] | None = None) -> dict:
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    holdings_block = ""
+    if current_positions:
+        holdings_block = (
+            f"\nCURRENT HOLDINGS (already open — keep unless 5MA broken or materially worse than alternatives)\n"
+            f"{'='*60}\n{json.dumps(current_positions, indent=2)}\n"
+        )
+
     user_msg = (
-        f"MARKET REGIME\n=============\n{json.dumps(regime, indent=2)}\n\n"
+        f"MARKET REGIME\n=============\n{json.dumps(regime, indent=2)}\n"
+        f"{holdings_block}\n"
         f"ENTRY SIGNAL SCORECARD ({len(scorecard)} candidates)\n"
         f"{'='*60}\n{json.dumps(scorecard, indent=2)}\n\n"
-        "Pick the best 5–10 swing trade entries for THIS WEEK."
+        "Pick the best 5–10 swing trade entries for THIS WEEK. "
+        "Include current holdings in your picks unless their 5MA is broken."
     )
     response = client.messages.create(
-        model=MODEL, max_tokens=4096,
+        model=MODEL, max_tokens=4096, temperature=0,
         system=[{"type": "text", "text": SYSTEM_PROMPT,
                  "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user_msg}],
@@ -457,7 +496,8 @@ def call_claude(scorecard: list[dict], regime: dict) -> dict:
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
 _SIGNAL_WEIGHT = {"POCKET_PIVOT": 100, "BREAKOUT": 90,
-                  "STAGE2_RECLAIM": 70, "VCP_BREAKOUT_READY": 50}
+                  "STAGE2_RECLAIM": 70, "VCP_BREAKOUT_READY": 50,
+                  "TRENDING_MOMENTUM": 40}
 
 
 def run_scan() -> dict:
@@ -480,7 +520,8 @@ def run_scan() -> dict:
         return {"run_date": run_date, "regime": regime, "error": "No entry signals found",
                 "picks": [], "watchlist": [], "exits": [], "holds": [],
                 "regime_summary": "", "market_stance": "neutral",
-                "sector_themes": [], "portfolio_rationale": ""}
+                "sector_themes": [], "portfolio_rationale": "",
+                "scorecard_count": 0}
 
     for s in scorecard:
         s["_score"] = (_SIGNAL_WEIGHT[s["signal_type"]] * 0.40 +
@@ -492,7 +533,12 @@ def run_scan() -> dict:
     for s in scorecard:
         del s["_score"]
 
-    claude_result = call_claude(scorecard, regime)
+    holdings_summary = [
+        {"ticker": p["ticker"], "entry_price": p["entry_price"],
+         "entry_date": p["entry_date"], "signal_type": p.get("signal_type", "")}
+        for p in positions
+    ]
+    claude_result = call_claude(scorecard, regime, holdings_summary)
 
     # enrich picks with live CMP, qty, allocation
     enriched_picks = []
@@ -505,7 +551,7 @@ def run_scan() -> dict:
                                 "alloc_inr": alloc_inr,
                                 "actual_inr": round(qty * cmp, 2) if cmp else 0})
 
-    # rebalance diff against current positions
+    # rebalance diff — only exit on 5MA break, never just for "dropped from picks"
     new_tickers = {p["ticker"] for p in enriched_picks}
     exits, holds = [], []
     for pos in positions:
@@ -516,8 +562,6 @@ def run_scan() -> dict:
         status = compute_5ma_status(df, entry_price=pos["entry_price"])
         if status["urgency"] == "exit":
             exits.append({**pos, **status, "exit_reason": "5MA EXIT"})
-        elif pos["ticker"] not in new_tickers:
-            exits.append({**pos, **status, "exit_reason": "dropped from picks"})
         else:
             holds.append({**pos, **status})
 

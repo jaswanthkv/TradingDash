@@ -103,14 +103,28 @@ def place_buy(ticker: str, qty: int,
     If stop_loss > 0 and place_sl is True, also places an SL-M sell order.
     order_type: "MARKET" | "LIMIT"
     """
+    symbol = _sym(ticker)
+    kite   = get_kite()
+    quote  = get_quote(ticker)
+    price  = limit_price or quote["last_price"]
+    est_val = round(price * qty, 2)
+
+    if dry_run:
+        return {
+            "status":     "dry_run",
+            "dry_run":    True,
+            "side":       "BUY",
+            "ticker":     ticker,
+            "symbol":     symbol,
+            "qty":        qty,
+            "order_type": order_type,
+            "price":      round(price, 2),
+            "est_value":  est_val,
+            "stop_loss":  stop_loss,
+        }
+
     if not is_market_open():
         raise ValueError("Market closed. NSE hours: 9:15 AM – 3:30 PM, Mon–Fri.")
-
-    symbol  = _sym(ticker)
-    kite    = get_kite()
-    quote   = get_quote(ticker)
-    price   = limit_price or quote["last_price"]
-    est_val = round(price * qty, 2)
 
     margins = get_margins()
     if margins["available"] < est_val:
@@ -120,32 +134,21 @@ def place_buy(ticker: str, qty: int,
             f"Free up funds or reduce qty."
         )
 
-    if dry_run:
-        return {
-            "dry_run":   True,
-            "side":      "BUY",
-            "ticker":    ticker,
-            "symbol":    symbol,
-            "qty":       qty,
-            "order_type": order_type,
-            "price":     round(price, 2),
-            "est_value": est_val,
-            "stop_loss": stop_loss,
-        }
-
+    # Kite API requires LIMIT orders — round to 0.10 (valid for both 0.05 and 0.10 tick stocks)
+    raw_price  = limit_price or price * 1.01
+    upper_cap  = quote.get("upper_circuit") or raw_price
+    raw_price  = min(raw_price, upper_cap)   # never exceed upper circuit
+    exec_price = round(int(round(raw_price / 0.10)) * 0.10, 2)
     buy_params = dict(
         tradingsymbol    = symbol,
         exchange         = _EXCHANGE,
         transaction_type = kite.TRANSACTION_TYPE_BUY,
         quantity         = qty,
-        order_type       = (kite.ORDER_TYPE_MARKET
-                            if order_type == "MARKET"
-                            else kite.ORDER_TYPE_LIMIT),
+        order_type       = kite.ORDER_TYPE_LIMIT,
+        price            = exec_price,
         product          = kite.PRODUCT_CNC,
         validity         = kite.VALIDITY_DAY,
     )
-    if order_type == "LIMIT" and limit_price:
-        buy_params["price"] = round(limit_price, 2)
 
     order_id = _retry_place(kite, **buy_params)
     logger.info("BUY placed: %s qty=%d order_id=%s", symbol, qty, order_id)
@@ -189,9 +192,6 @@ def place_sell(ticker: str, qty: int,
                limit_price: float  = 0,
                dry_run: bool       = False) -> dict:
     """Place a CNC sell order on NSE."""
-    if not is_market_open():
-        raise ValueError("Market closed. NSE hours: 9:15 AM – 3:30 PM, Mon–Fri.")
-
     symbol  = _sym(ticker)
     kite    = get_kite()
     quote   = get_quote(ticker)
@@ -200,6 +200,7 @@ def place_sell(ticker: str, qty: int,
 
     if dry_run:
         return {
+            "status":     "dry_run",
             "dry_run":    True,
             "side":       "SELL",
             "ticker":     ticker,
@@ -210,19 +211,24 @@ def place_sell(ticker: str, qty: int,
             "est_value":  est_val,
         }
 
+    if not is_market_open():
+        raise ValueError("Market closed. NSE hours: 9:15 AM – 3:30 PM, Mon–Fri.")
+
+    # Kite API requires LIMIT orders — round to 0.10 (valid for both 0.05 and 0.10 tick stocks)
+    raw_price  = limit_price or price * 0.99
+    lower_cap  = quote.get("lower_circuit") or raw_price
+    raw_price  = max(raw_price, lower_cap)   # never go below lower circuit
+    exec_price = round(int(round(raw_price / 0.10)) * 0.10, 2)
     sell_params = dict(
         tradingsymbol    = symbol,
         exchange         = _EXCHANGE,
         transaction_type = kite.TRANSACTION_TYPE_SELL,
         quantity         = qty,
-        order_type       = (kite.ORDER_TYPE_MARKET
-                            if order_type == "MARKET"
-                            else kite.ORDER_TYPE_LIMIT),
+        order_type       = kite.ORDER_TYPE_LIMIT,
+        price            = exec_price,
         product          = kite.PRODUCT_CNC,
         validity         = kite.VALIDITY_DAY,
     )
-    if order_type == "LIMIT" and limit_price:
-        sell_params["price"] = round(limit_price, 2)
 
     order_id = _retry_place(kite, **sell_params)
     logger.info("SELL placed: %s qty=%d order_id=%s", symbol, qty, order_id)
@@ -255,6 +261,30 @@ def get_order_status(order_id: str) -> dict:
     return {"order_id": order_id, "status": "NOT_FOUND"}
 
 
+def get_holdings() -> list[dict]:
+    import math
+    kite = get_kite()
+    out = []
+    for h in kite.holdings():
+        qty = int(h["quantity"] or 0)
+        if qty <= 0:
+            continue
+        avg  = float(h["average_price"] or 0)
+        last = float(h["last_price"] or 0)
+        if math.isnan(last): last = avg   # fallback to cost price
+        if math.isnan(avg):  avg  = last
+        pnl_pct = round((last - avg) / avg * 100, 2) if avg else 0
+        out.append({
+            "ticker":     h["tradingsymbol"] + ".NS",
+            "qty":        qty,
+            "avg_price":  round(avg, 2),
+            "last_price": round(last, 2),
+            "pnl":        round(float(h.get("pnl") or 0), 2),
+            "pnl_pct":    pnl_pct,
+        })
+    return out
+
+
 def get_today_orders() -> list[dict]:
     kite = get_kite()
     return [
@@ -272,3 +302,51 @@ def get_today_orders() -> list[dict]:
         }
         for o in kite.orders()
     ]
+
+
+# ── options order placement ───────────────────────────────────────────────────
+
+def place_option_sell(tradingsymbol: str, exchange: str, qty: int,
+                      dry_run: bool = False) -> dict:
+    """Sell (short) an option — NRML product, used for 0DTE/1DTE strategies."""
+    if not is_market_open():
+        raise ValueError("Market closed. NSE hours: 9:15 AM – 3:30 PM, Mon–Fri.")
+    kite = get_kite()
+    if dry_run:
+        return {"dry_run": True, "side": "SELL", "tradingsymbol": tradingsymbol,
+                "exchange": exchange, "qty": qty}
+    order_id = _retry_place(kite,
+        tradingsymbol    = tradingsymbol,
+        exchange         = exchange,
+        transaction_type = kite.TRANSACTION_TYPE_SELL,
+        quantity         = qty,
+        order_type       = kite.ORDER_TYPE_MARKET,
+        product          = kite.PRODUCT_NRML,
+        validity         = kite.VALIDITY_DAY,
+    )
+    logger.info("Option SELL placed: %s qty=%d id=%s", tradingsymbol, qty, order_id)
+    return {"status": "placed", "side": "SELL", "tradingsymbol": tradingsymbol,
+            "exchange": exchange, "qty": qty, "order_id": str(order_id)}
+
+
+def place_option_buy(tradingsymbol: str, exchange: str, qty: int,
+                     dry_run: bool = False) -> dict:
+    """Buy back a short option to exit position."""
+    if not is_market_open():
+        raise ValueError("Market closed. NSE hours: 9:15 AM – 3:30 PM, Mon–Fri.")
+    kite = get_kite()
+    if dry_run:
+        return {"dry_run": True, "side": "BUY", "tradingsymbol": tradingsymbol,
+                "exchange": exchange, "qty": qty}
+    order_id = _retry_place(kite,
+        tradingsymbol    = tradingsymbol,
+        exchange         = exchange,
+        transaction_type = kite.TRANSACTION_TYPE_BUY,
+        quantity         = qty,
+        order_type       = kite.ORDER_TYPE_MARKET,
+        product          = kite.PRODUCT_NRML,
+        validity         = kite.VALIDITY_DAY,
+    )
+    logger.info("Option BUY (exit) placed: %s qty=%d id=%s", tradingsymbol, qty, order_id)
+    return {"status": "placed", "side": "BUY", "tradingsymbol": tradingsymbol,
+            "exchange": exchange, "qty": qty, "order_id": str(order_id)}

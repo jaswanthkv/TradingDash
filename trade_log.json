@@ -1,17 +1,3 @@
 [
-  {
-    "ticker": "MANORAMA.NS",
-    "signal_type": "BREAKOUT",
-    "entry_date": "2026-05-01",
-    "exit_date": "2026-05-01",
-    "holding_days": 0,
-    "entry_price": 1509,
-    "exit_price": 1509,
-    "qty": 43,
-    "pnl_inr": 0,
-    "pnl_pct": 0.0,
-    "r_multiple": 0.0,
-    "exit_reason": "dropped from picks",
-    "position_pct": 13
-  }
+
 ]

@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Report</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #d6cfc4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 60px;
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── controls bar ── */
+  .controls {
+    display: flex; gap: 10px; margin-bottom: 24px;
+    align-items: center; flex-wrap: wrap; justify-content: center;
+  }
+  .ctrl-btn {
+    padding: 9px 22px; border-radius: 8px; border: none;
+    cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit;
+  }
+  .ctrl-btn.primary   { background: #111; color: #fff; }
+  .ctrl-btn.secondary { background: #fff; color: #374151; border: 1.5px solid #d1d5db; }
+  .ctrl-pill {
+    display: flex; background: #fff; border-radius: 8px;
+    overflow: hidden; border: 1.5px solid #d1d5db;
+  }
+  .ctrl-pill button {
+    padding: 8px 18px; border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600; font-family: inherit;
+    background: transparent; color: #64748b; transition: all .15s;
+  }
+  .ctrl-pill button.active { background: #111; color: #fff; }
+
+  #loading {
+    color: #64748b; font-size: 14px; padding: 40px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* ── card ── */
+  #card {
+    width: 1080px;
+    background: #f5efe3;
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 8px 48px rgba(0,0,0,.18);
+  }
+
+  /* ── header ── */
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 44px 56px 40px;
+    background: #111;
+    color: #f5efe3;
+  }
+  .header-left {}
+  .header-tag {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 10px;
+  }
+  .header-title {
+    font-size: 54px;
+    font-weight: 900;
+    color: #f5efe3;
+    line-height: 1;
+    letter-spacing: -1.5px;
+  }
+  .header-title span { color: #4ade80; }
+  .header-right { text-align: right; }
+  .header-date {
+    font-size: 42px;
+    font-weight: 800;
+    color: #f5efe3;
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+  .header-sub {
+    font-size: 13px;
+    color: #666;
+    margin-top: 6px;
+    font-weight: 500;
+    letter-spacing: .02em;
+  }
+
+  /* ── stats bar ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    background: #1e1e1e;
+    border-bottom: 3px solid #111;
+  }
+  .stat-box {
+    padding: 32px 40px;
+    border-right: 1px solid rgba(255,255,255,.06);
+  }
+  .stat-box:last-child { border-right: none; }
+  .stat-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 10px;
+  }
+  .stat-value {
+    font-size: 48px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -1.5px;
+    color: #f5efe3;
+  }
+  .stat-value.positive { color: #4ade80; }
+  .stat-value.negative { color: #f87171; }
+  .stat-vs {
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+    margin-top: 8px;
+  }
+  .stat-vs b { color: #aaa; }
+
+  /* ── chart area ── */
+  .chart-area {
+    background: #f5efe3;
+    padding: 36px 48px 40px;
+  }
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .chart-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #888;
+  }
+  .chart-legend {
+    display: flex; gap: 20px;
+    font-size: 12px; font-weight: 600; color: #666;
+  }
+  .chart-legend-item { display: flex; align-items: center; gap: 6px; }
+  .chart-legend-dot  { width: 24px; height: 3px; border-radius: 2px; }
+
+  /* ── monthly returns ── */
+  .monthly-section {
+    padding: 0 48px 32px;
+  }
+  .monthly-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 14px;
+  }
+  .monthly-grid {
+    display: grid;
+    grid-template-columns: 52px repeat(12, 1fr) 72px;
+    gap: 3px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12px;
+  }
+  .mg-header {
+    font-weight: 700;
+    color: #999;
+    text-align: center;
+    padding: 4px 2px;
+    font-size: 11px;
+    letter-spacing: .04em;
+  }
+  .mg-year {
+    font-weight: 800;
+    color: #333;
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+  }
+  .mg-cell {
+    text-align: center;
+    padding: 6px 2px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 11.5px;
+  }
+  .mg-pos  { background: #dcfce7; color: #166534; }
+  .mg-neg  { background: #fee2e2; color: #991b1b; }
+  .mg-nil  { color: #ccc; }
+  .mg-annual { font-weight: 800; font-size: 12.5px; }
+
+  /* ── footer ── */
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 48px;
+    background: #111;
+    border-top: 1px solid #222;
+  }
+  .footer-disclaimer {
+    font-size: 12px;
+    color: #444;
+    font-weight: 500;
+    letter-spacing: .02em;
+  }
+  .footer-brand {
+    font-size: 13px;
+    font-weight: 700;
+    color: #555;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <div class="ctrl-pill">
+    <button id="mktIndia" class="active" onclick="setMarket('india')">🇮🇳 India</button>
+    <button id="mktUs"    onclick="setMarket('us')">🇺🇸 US</button>
+  </div>
+  <button class="ctrl-btn secondary" onclick="loadReport()">↻ Refresh</button>
+  <button class="ctrl-btn primary"   onclick="downloadPng()">⬇ Download PNG</button>
+</div>
+
+<div id="loading">Loading portfolio data…</div>
+
+<div id="card" style="display:none">
+  <!-- HEADER -->
+  <div class="card-header">
+    <div class="header-left">
+      <div class="header-tag">Monthly Update</div>
+      <div class="header-title">Portfolio<br><span>Performance</span></div>
+    </div>
+    <div class="header-right">
+      <div class="header-date" id="rDate"></div>
+      <div class="header-sub">Momentum Strategy · Equal Weight</div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="stat-label">Monthly Return</div>
+      <div class="stat-value" id="rMtd">—</div>
+      <div class="stat-vs">Nifty 50 <b id="rBmtd">—</b> · SC250 <b id="rBmtd2">—</b></div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">This Week</div>
+      <div class="stat-value" id="rWeek">—</div>
+      <div class="stat-vs">Nifty 50 <b id="rBweek">—</b> · SC250 <b id="rBweek2">—</b></div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">This Year</div>
+      <div class="stat-value" id="rYtd">—</div>
+      <div class="stat-vs">Nifty 50 <b id="rBytd">—</b> · SC250 <b id="rBytd2">—</b></div>
+    </div>
+  </div>
+
+  <!-- CHART -->
+  <div class="chart-area">
+    <div class="chart-header">
+      <div class="chart-title">This week's performance</div>
+      <div class="chart-legend">
+        <div class="chart-legend-item">
+          <div class="chart-legend-dot" style="background:#4ade80"></div>
+          <span id="legendStrat">Portfolio</span>
+        </div>
+        <div class="chart-legend-item">
+          <div class="chart-legend-dot" style="background:#888"></div>
+          <span id="legendBench">Nifty 50</span>
+        </div>
+        <div class="chart-legend-item">
+          <div class="chart-legend-dot" style="background:#f59e0b; height:3px; border-top: 2px dashed #f59e0b; background:none"></div>
+          <span id="legendBench2">Nifty SC250</span>
+        </div>
+      </div>
+    </div>
+    <svg id="perfChart" width="984" height="260" style="display:block;width:100%"></svg>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="card-footer">
+    <div class="footer-disclaimer">Not financial advice · Past performance ≠ future results</div>
+    <div class="footer-brand">TradeBoard</div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let _market = new URLSearchParams(location.search).get('market') || 'india';
+
+function setMarket(m) {
+  _market = m;
+  document.getElementById('mktIndia').classList.toggle('active', m === 'india');
+  document.getElementById('mktUs').classList.toggle('active', m === 'us');
+  loadReport();
+}
+
+async function loadReport() {
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('card').style.display    = 'none';
+  try {
+    const d = await fetch(`${API}/api/report/data?market=${_market}`).then(r => r.json());
+    renderCard(d);
+  } catch(e) {
+    document.getElementById('loading').textContent = 'Error: ' + e.message;
+    return;
+  }
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('card').style.display    = '';
+}
+
+function fmt(v, prefix = '+') {
+  if (v == null) return '—';
+  const s = (v >= 0 ? prefix : '') + v.toFixed(1) + '%';
+  return s;
+}
+
+function colorVal(el, v) {
+  el.textContent = fmt(v);
+  el.className = 'stat-value' + (v == null ? '' : v >= 0 ? ' positive' : ' negative');
+}
+
+function renderCard(d) {
+  document.getElementById('rDate').textContent  = d.date;
+
+  colorVal(document.getElementById('rMtd'),  d.portfolio_mtd);
+  colorVal(document.getElementById('rWeek'), d.portfolio_week);
+  colorVal(document.getElementById('rYtd'),  d.portfolio_ytd);
+  document.getElementById('rBytd').textContent  = fmt(d.benchmark_ytd);
+  document.getElementById('rBytd2').textContent = fmt(d.smallcap_ytd);
+
+  const bLabel = d.benchmark_label?.replace(' Buy & Hold','') || 'Benchmark';
+  document.getElementById('rBmtd').textContent  = fmt(d.benchmark_mtd);
+  document.getElementById('rBmtd2').textContent = fmt(d.smallcap_mtd);
+  document.getElementById('rBweek').textContent  = fmt(d.benchmark_week);
+  document.getElementById('rBweek2').textContent = fmt(d.smallcap_week);
+  document.getElementById('legendStrat').textContent = 'Portfolio';
+  document.getElementById('legendBench').textContent = bLabel;
+
+  drawPerfChart(d.dates || [], d.strategy_curve || [], d.benchmark_curve || [], d.benchmark2_curve || [], bLabel);
+}
+
+
+// ── Performance chart ─────────────────────────────────────────────────────────
+function drawPerfChart(dates, strat, bench, bench2, benchLabel) {
+  const svg  = document.getElementById('perfChart');
+  const W    = 984, H = 260;
+  const padL = 52, padR = 110, padT = 20, padB = 36;
+  const gW   = W - padL - padR, gH = H - padT - padB;
+
+  if (!strat.length) { svg.innerHTML = ''; return; }
+
+  // strat/bench are ratio values (1.0 = flat); filter nulls before converting
+  const normS  = strat.map(v  => v  != null ? (v  - 1) * 100 : null);
+  const normB  = bench.length  ? bench.map(v  => v  != null ? (v  - 1) * 100 : null) : [];
+  const normB2 = bench2.length ? bench2.map(v => v  != null ? (v  - 1) * 100 : null) : [];
+
+  const validS = normS.filter(v => v != null);
+  const validB = normB.filter(v => v != null);
+  const validB2= normB2.filter(v => v != null);
+  const allVals = [...validS, ...validB, ...validB2];
+  if (!allVals.length) { svg.innerHTML = ''; return; }
+
+  const minV  = Math.min(...allVals), maxV = Math.max(...allVals);
+  const pad   = (maxV - minV) * 0.1 || 0.5;
+  const rangeV = (maxV - minV + pad * 2) || 1;
+  const baseV  = minV - pad;
+
+  const xOf = i => padL + (i / (normS.length - 1)) * gW;
+  const yOf = v => padT + (1 - (v - baseV) / rangeV) * gH;
+
+  // Build path — skip null points using M/L correctly
+  const pathOf = arr => {
+    let d = '', first = true;
+    arr.forEach((v, i) => {
+      if (v == null) { first = true; return; }
+      d += `${first ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)} `;
+      first = false;
+    });
+    return d.trim();
+  };
+
+  // Zero line
+  const zeroY = yOf(0);
+  let gridLines = `<line x1="${padL}" y1="${zeroY}" x2="${padL+gW}" y2="${zeroY}" stroke="rgba(0,0,0,.15)" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+  let yLabels = '';
+
+  // Y-axis ticks
+  const ticks = 4;
+  for (let i = 0; i <= ticks; i++) {
+    const v = baseV + rangeV * (i / ticks);
+    const y = yOf(v);
+    if (y > padT && y < padT + gH) {
+      gridLines += `<line x1="${padL}" y1="${y}" x2="${padL+gW}" y2="${y}" stroke="rgba(0,0,0,.05)" stroke-width="1"/>`;
+      yLabels += `<text x="${padL-10}" y="${y}" text-anchor="end" dominant-baseline="middle"
+        font-size="11" font-family="Inter,system-ui" fill="#aaa" font-weight="500">${v>=0?'+':''}${v.toFixed(1)}%</text>`;
+    }
+  }
+
+  // X-axis day labels
+  let xLabels = '';
+  dates.forEach((d, i) => {
+    xLabels += `<text x="${xOf(i)}" y="${padT+gH+22}" text-anchor="middle"
+      font-size="12" font-family="Inter,system-ui" fill="#999" font-weight="600">${d}</text>`;
+  });
+
+  // Area fill under strategy (only non-null segments)
+  const lastValidS = validS[validS.length - 1];
+  const floorY = yOf(Math.min(0, baseV));
+  const areaPath = pathOf(normS)
+    + ` L${xOf(normS.length-1).toFixed(1)},${floorY.toFixed(1)} L${xOf(0).toFixed(1)},${floorY.toFixed(1)} Z`;
+
+  // End labels
+  const lastS    = normS.filter(v => v != null).at(-1);
+  const lastB    = normB.filter(v => v != null).at(-1);
+  const lastX    = xOf(normS.length - 1);
+  const lastSY   = yOf(lastS ?? 0);
+  const lastBY   = lastB != null ? yOf(lastB) : null;
+  const stratPct = (lastS ?? 0).toFixed(1);
+  const benchPct = lastB != null ? lastB.toFixed(1) : null;
+  const sColor   = parseFloat(stratPct) >= 0 ? '#4ade80' : '#f87171';
+
+  let endLabels = `
+    <circle cx="${lastX}" cy="${lastSY}" r="6" fill="${sColor}"/>
+    <text x="${lastX+14}" y="${lastSY+5}" font-size="15" font-weight="800" font-family="Inter,system-ui" fill="#111">
+      ${stratPct>=0?'+':''}${stratPct}%
+    </text>`;
+
+  if (benchPct !== null) {
+    endLabels += `
+      <circle cx="${lastX}" cy="${lastBY}" r="5" fill="#888"/>
+      <text x="${lastX+12}" y="${lastBY+5}" font-size="13" font-weight="700" font-family="Inter,system-ui" fill="#777">
+        ${benchPct>=0?'+':''}${benchPct}%
+      </text>`;
+  }
+
+  const lastB2   = normB2.filter(v => v != null).at(-1);
+  const lastBY2  = lastB2 != null ? yOf(lastB2) : null;
+  const benchPct2= lastB2 != null ? lastB2.toFixed(1) : null;
+  if (benchPct2 !== null) {
+    endLabels += `
+      <circle cx="${lastX}" cy="${lastBY2}" r="5" fill="#f59e0b"/>
+      <text x="${lastX+12}" y="${lastBY2+5}" font-size="13" font-weight="700" font-family="Inter,system-ui" fill="#d97706">
+        ${benchPct2>=0?'+':''}${benchPct2}%
+      </text>`;
+  }
+
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="${sColor}" stop-opacity="0.18"/>
+        <stop offset="100%" stop-color="${sColor}" stop-opacity="0.02"/>
+      </linearGradient>
+    </defs>
+    ${gridLines}
+    ${yLabels}
+    ${xLabels}
+    <path d="${areaPath}" fill="url(#areaGrad)"/>
+    ${normB.length  ? `<path d="${pathOf(normB)}"  fill="none" stroke="#999"    stroke-width="2"   stroke-dasharray="5,3"/>` : ''}
+    ${normB2.length ? `<path d="${pathOf(normB2)}" fill="none" stroke="#f59e0b" stroke-width="2"   stroke-dasharray="5,3"/>` : ''}
+    <path d="${pathOf(normS)}" fill="none" stroke="${sColor}" stroke-width="3"/>
+    ${endLabels}`;
+}
+
+// ── Download PNG ─────────────────────────────────────────────────────────────
+async function downloadPng() {
+  const card = document.getElementById('card');
+  const canvas = await html2canvas(card, {
+    scale: 2,
+    backgroundColor: null,
+    useCORS: true,
+    allowTaint: true,
+  });
+  const link = document.createElement('a');
+  link.download = `portfolio-${_market}-${new Date().toISOString().slice(0,10)}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+if (_market === 'us') {
+  document.getElementById('mktIndia').classList.remove('active');
+  document.getElementById('mktUs').classList.add('active');
+}
+loadReport();
+</script>
+</body>
+</html>
