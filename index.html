@@ -483,7 +483,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   <div id="portError" class="empty hidden">
     <div class="empty-icon">⚠️</div>
     <div class="empty-title" id="portErrorMsg">Something went wrong</div>
-    <div class="empty-sub">Run ML Rankings and Momentum Backtest first, then refresh.</div>
+    <div class="empty-sub">Run Minervini and Momentum Backtest first, then refresh.</div>
   </div>
 
   <!-- content -->
@@ -501,9 +501,9 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
         </div>
         <div style="width:1px;height:20px;background:#e2e8f0"></div>
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:#6366f1;font-weight:600">ML Portfolio</span>
-          <span id="dayML" style="font-size:15px;font-weight:800">—</span>
-          <span id="dayMLDiff" style="font-size:11px;color:#94a3b8"></span>
+          <span style="font-size:11px;color:#f59e0b;font-weight:600">Minervini</span>
+          <span id="dayMin" style="font-size:15px;font-weight:800">—</span>
+          <span id="dayMinDiff" style="font-size:11px;color:#94a3b8"></span>
         </div>
         <div style="width:1px;height:20px;background:#e2e8f0"></div>
         <div style="display:flex;align-items:center;gap:6px">
@@ -522,9 +522,9 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
         </div>
         <div style="width:1px;height:20px;background:#e2e8f0"></div>
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:#6366f1;font-weight:600">ML Portfolio</span>
-          <span id="mtdML" style="font-size:15px;font-weight:800">—</span>
-          <span id="mtdMLDiff" style="font-size:11px;color:#94a3b8"></span>
+          <span style="font-size:11px;color:#f59e0b;font-weight:600">Minervini</span>
+          <span id="mtdMin" style="font-size:15px;font-weight:800">—</span>
+          <span id="mtdMinDiff" style="font-size:11px;color:#94a3b8"></span>
         </div>
         <div style="width:1px;height:20px;background:#e2e8f0"></div>
         <div style="display:flex;align-items:center;gap:6px">
@@ -539,28 +539,27 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
     <div class="page">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
 
-        <!-- ML Strategy card -->
+        <!-- Minervini SEPA card -->
         <div class="card">
           <div class="card-head">
-            <span class="card-title">🤖 ML Strategy</span>
-            <span id="mlPortAsOf" class="d" style="font-size:11px">—</span>
+            <span class="card-title">🏆 Minervini SEPA</span>
+            <span id="minPortAsOf" class="d" style="font-size:11px">—</span>
           </div>
-          <div id="mlPortEmpty" class="empty" style="padding:24px">
-            <div class="empty-title" style="font-size:13px">No ML rankings yet</div>
-            <div class="empty-sub">Go to ML Strategy → Rankings and run it first.</div>
+          <div id="minPortEmpty" class="empty" style="padding:24px">
+            <div class="empty-title" style="font-size:13px">No Minervini backtest yet</div>
+            <div class="empty-sub">Go to Minervini tab and run backtest first.</div>
           </div>
-          <div id="mlPortTable" class="hidden">
+          <div id="minPortTable" class="hidden">
             <div class="tbl-wrap" style="max-height:420px">
               <table>
                 <thead><tr>
                   <th style="text-align:left">Symbol</th>
-                  <th>Rank</th>
-                  <th>Score</th>
+                  <th>RS Rating</th>
                   <th>Price (₹)</th>
                   <th>Today %</th>
                   <th>Month %</th>
                 </tr></thead>
-                <tbody id="mlPortBody"></tbody>
+                <tbody id="minPortBody"></tbody>
               </table>
             </div>
           </div>
@@ -1597,15 +1596,15 @@ function renderDayChange(d) {
   const fmt = dt => new Date(dt).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
 
   // ── Last Session ───────────────────────────────────────────────────────
-  const n500 = d.nifty500, ml = d.ml_portfolio, mom = d.mom_portfolio;
+  const n500 = d.nifty500, min = d.min_portfolio, mom = d.mom_portfolio;
   document.getElementById('dayN500').innerHTML = _pctHtml(n500);
-  document.getElementById('dayML').innerHTML   = _pctHtml(ml);
+  document.getElementById('dayMin').innerHTML  = _pctHtml(min);
   document.getElementById('dayMom').innerHTML  = _pctHtml(mom);
   if (d.as_of)
     setText('dayAsOf', `(${fmt(d.prev_close_date)} → ${fmt(d.as_of)})`);
-  if (n500 != null && ml != null) {
-    const diff = ml - n500;
-    document.getElementById('dayMLDiff').innerHTML =
+  if (n500 != null && min != null) {
+    const diff = min - n500;
+    document.getElementById('dayMinDiff').innerHTML =
       `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
   }
   if (n500 != null && mom != null) {
@@ -1615,15 +1614,15 @@ function renderDayChange(d) {
   }
 
   // ── Current Month ──────────────────────────────────────────────────────
-  const mn500 = d.mtd_nifty500, mml = d.mtd_ml_portfolio, mmom = d.mtd_mom_portfolio;
+  const mn500 = d.mtd_nifty500, mmin = d.mtd_min_portfolio, mmom = d.mtd_mom_portfolio;
   document.getElementById('mtdN500').innerHTML = _pctHtml(mn500);
-  document.getElementById('mtdML').innerHTML   = _pctHtml(mml);
+  document.getElementById('mtdMin').innerHTML  = _pctHtml(mmin);
   document.getElementById('mtdMom').innerHTML  = _pctHtml(mmom);
   if (d.month_start_date && d.as_of)
     setText('mtdAsOf', `(${fmt(d.month_start_date)} → ${fmt(d.as_of)})`);
-  if (mn500 != null && mml != null) {
-    const diff = mml - mn500;
-    document.getElementById('mtdMLDiff').innerHTML =
+  if (mn500 != null && mmin != null) {
+    const diff = mmin - mn500;
+    document.getElementById('mtdMinDiff').innerHTML =
       `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
   }
   if (mn500 != null && mmom != null) {
@@ -1632,17 +1631,17 @@ function renderDayChange(d) {
       `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
   }
 
-  // ── Per-stock Today % (col 4) and Month % (col 5) for ML ──────────────
-  const mlStocks    = d.ml_stocks    || {};
-  const mlMtd       = d.mtd_ml_stocks || {};
-  const momStocks   = d.mom_stocks   || {};
-  const momMtd      = d.mtd_mom_stocks || {};
+  // ── Per-stock Today % and Month % ──────────────────────────────────────
+  const minStocks = d.min_stocks    || {};
+  const minMtd    = d.mtd_min_stocks || {};
+  const momStocks = d.mom_stocks    || {};
+  const momMtd    = d.mtd_mom_stocks || {};
 
-  document.querySelectorAll('#mlPortBody tr').forEach(tr => {
+  document.querySelectorAll('#minPortBody tr').forEach(tr => {
     const sym = tr.dataset.sym;
     if (!sym) return;
-    if (tr.cells[4]) tr.cells[4].innerHTML = _pctHtml(mlStocks[sym] ?? null);
-    if (tr.cells[5]) tr.cells[5].innerHTML = _pctHtml(mlMtd[sym]    ?? null);
+    if (tr.cells[3]) tr.cells[3].innerHTML = _pctHtml(minStocks[sym] ?? null);
+    if (tr.cells[4]) tr.cells[4].innerHTML = _pctHtml(minMtd[sym]    ?? null);
   });
   document.querySelectorAll('#momPortBody tr').forEach(tr => {
     const sym = tr.dataset.sym;
@@ -1655,9 +1654,9 @@ function renderDayChange(d) {
 function renderPortfolio(d) {
   hide('portLoading');
 
-  if (!d.ml && !d.momentum) {
+  if (!d.minervini && !d.momentum) {
     show('portError');
-    setText('portErrorMsg', 'No strategy data yet — run ML Rankings and Momentum Backtest first.');
+    setText('portErrorMsg', 'No strategy data yet — run Minervini and Momentum Backtest first.');
     return;
   }
 
@@ -1671,24 +1670,24 @@ function renderPortfolio(d) {
     badge.textContent = `Next rebalance in ${rb.days_left}d · ${rb.label}`;
   }
 
-  // ── ML picks ──────────────────────────────────────────────────────────
-  if (d.ml && d.ml.holdings && d.ml.holdings.length) {
-    setText('mlPortAsOf', 'as of ' + (d.ml.as_of || ''));
-    hide('mlPortEmpty'); show('mlPortTable');
-    const tbody = document.getElementById('mlPortBody');
+  // ── Minervini picks ───────────────────────────────────────────────────
+  if (d.minervini && d.minervini.holdings && d.minervini.holdings.length) {
+    setText('minPortAsOf', 'as of ' + (d.minervini.as_of || ''));
+    hide('minPortEmpty'); show('minPortTable');
+    const tbody = document.getElementById('minPortBody');
     tbody.innerHTML = '';
-    d.ml.holdings.forEach(h => {
+    d.minervini.holdings.forEach(h => {
+      const rs = h.rs_rating != null ? h.rs_rating.toFixed(1) : '—';
       tbody.innerHTML += `<tr data-sym="${h.symbol}">
-        <td><span class="rank-badge in-portfolio">${h.rank}</span>${h.symbol}</td>
-        <td>${h.rank}</td>
-        <td><span style="font-weight:700;color:#6366f1">${h.score}</span></td>
+        <td style="font-weight:600">${h.symbol}</td>
+        <td><span style="font-weight:700;color:#f59e0b">${rs}</span></td>
         <td>₹${(h.price||0).toLocaleString('en-IN')}</td>
         <td class="d">—</td>
         <td class="d">—</td>
       </tr>`;
     });
   } else {
-    show('mlPortEmpty'); hide('mlPortTable');
+    show('minPortEmpty'); hide('minPortTable');
   }
 
   // ── Momentum picks ────────────────────────────────────────────────────

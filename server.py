@@ -282,33 +282,26 @@ def _next_rebalance() -> dict:
 
 @app.get("/api/portfolio/daily-change")
 async def portfolio_daily_change():
-    """Daily % change for ML + Momentum strategy portfolios vs Nifty 500."""
+    """Daily % change for Minervini + Momentum strategy portfolios vs Nifty 500."""
     import yfinance as yf
     import numpy as np
 
-    # Current display portfolio: today's rankings (for Today % column and table display)
-    ml_tickers_now, mom_tickers_now = [], []
-    if _ml_rank_cache:
-        ml_tickers_now = [r["ticker"] for r in _ml_rank_cache.get("rankings", []) if r.get("in_top20")]
+    # Last rebalance holdings for each strategy
+    min_tickers_now, mom_tickers_now = [], []
+    if _min_bt_cache:
+        rh = _min_bt_cache.get("rebalance_history", [])
+        if rh:
+            min_tickers_now = rh[-1].get("holdings", [])
     if _mom_bt_cache:
         rh = _mom_bt_cache.get("rebalance_history", [])
         if rh:
             mom_tickers_now = rh[-1].get("holdings", [])
 
-    # MTD portfolio: last rebalance holdings (what was actually entered this month)
-    # Falls back to current rankings if backtest hasn't been run.
-    ml_tickers_mtd = ml_tickers_now
-    if _ml_bt_cache:
-        rh_ml = _ml_bt_cache.get("rebalance_history", [])
-        if rh_ml:
-            ml_tickers_mtd = rh_ml[-1].get("holdings", [])
-    mom_tickers_mtd = mom_tickers_now  # momentum already uses rebalance history
+    min_tickers_mtd = min_tickers_now
+    mom_tickers_mtd = mom_tickers_now
 
-    # Union for a single download pass
-    ml_tickers  = ml_tickers_now
-    mom_tickers = mom_tickers_now
-    all_tickers = list(set(ml_tickers_now + mom_tickers_now +
-                           ml_tickers_mtd + mom_tickers_mtd + ["^CRSLDX"]))
+    all_tickers = list(set(min_tickers_now + mom_tickers_now +
+                           min_tickers_mtd + mom_tickers_mtd + ["^CRSLDX"]))
     from datetime import date as _date
     month_start = _date.today().replace(day=1).strftime("%Y-%m-%d")
 
@@ -360,65 +353,51 @@ async def portfolio_daily_change():
     month_start_actual = str(bm.index[0])[:10] if len(bm) >= 1 else month_start
 
     return {
-        # Last-session — cover all displayed tickers (backtest holdings ∪ current rankings)
         "nifty500":        changes.get("^CRSLDX"),
-        "ml_portfolio":    _port_avg(ml_tickers_now, changes),
+        "min_portfolio":   _port_avg(min_tickers_now, changes),
         "mom_portfolio":   _port_avg(mom_tickers_now, changes),
-        "ml_stocks":       {t.replace(".NS",""): changes.get(t)
-                            for t in set(ml_tickers_now) | set(ml_tickers_mtd) if changes.get(t) is not None},
+        "min_stocks":      {t.replace(".NS",""): changes.get(t)
+                            for t in set(min_tickers_now) | set(min_tickers_mtd) if changes.get(t) is not None},
         "mom_stocks":      {t.replace(".NS",""): changes.get(t)
                             for t in set(mom_tickers_now) | set(mom_tickers_mtd) if changes.get(t) is not None},
         "as_of":           as_of,
         "prev_close_date": prev,
-        # MTD (last-rebalance holdings = what was entered at start of month)
-        "mtd_nifty500":      mtd.get("^CRSLDX"),
-        "mtd_ml_portfolio":  _port_avg(ml_tickers_mtd, mtd),
-        "mtd_mom_portfolio": _port_avg(mom_tickers_mtd, mtd),
-        # Per-stock MTD covers both rebalance holdings AND current top-20 so every
-        # row in the table gets a value regardless of which portfolio it came from.
-        "mtd_ml_stocks":     {t.replace(".NS",""): mtd.get(t)
-                              for t in set(ml_tickers_mtd) | set(ml_tickers_now) if mtd.get(t) is not None},
-        "mtd_mom_stocks":    {t.replace(".NS",""): mtd.get(t)
-                              for t in set(mom_tickers_mtd) | set(mom_tickers_now) if mtd.get(t) is not None},
-        "month_start_date":  month_start_actual,
+        "mtd_nifty500":       mtd.get("^CRSLDX"),
+        "mtd_min_portfolio":  _port_avg(min_tickers_mtd, mtd),
+        "mtd_mom_portfolio":  _port_avg(mom_tickers_mtd, mtd),
+        "mtd_min_stocks":     {t.replace(".NS",""): mtd.get(t)
+                               for t in set(min_tickers_mtd) | set(min_tickers_now) if mtd.get(t) is not None},
+        "mtd_mom_stocks":     {t.replace(".NS",""): mtd.get(t)
+                               for t in set(mom_tickers_mtd) | set(mom_tickers_now) if mtd.get(t) is not None},
+        "month_start_date":   month_start_actual,
     }
 
 
 @app.get("/api/portfolio/strategies")
 def portfolio_strategies():
-    """Current ML + Momentum strategy picks — no Kite required."""
-    result = {"ml": None, "momentum": None, "next_rebalance": _next_rebalance()}
+    """Current Minervini + Momentum strategy picks — no Kite required."""
+    result = {"minervini": None, "momentum": None, "next_rebalance": _next_rebalance()}
 
-    if _ml_rank_cache:
-        # Build rank/score/price lookup from today's rankings
-        rank_map = {r["ticker"].replace(".NS",""): r
-                    for r in _ml_rank_cache.get("rankings", [])}
-
-        # Use last-rebalance holdings when backtest has been run so the table
-        # matches the MTD aggregate (both reflect what was entered at month-start).
-        # Fall back to today's top-20 if no backtest cache exists.
-        if _ml_bt_cache:
-            rh_ml = _ml_bt_cache.get("rebalance_history", [])
-            held_tickers = [t.replace(".NS","") for t in rh_ml[-1].get("holdings",[])] if rh_ml else []
-        else:
-            held_tickers = [r["ticker"].replace(".NS","")
-                            for r in _ml_rank_cache.get("rankings",[]) if r.get("in_top20")]
-
-        holdings = []
-        for i, sym in enumerate(held_tickers, 1):
-            r = rank_map.get(sym, {})
-            holdings.append({
-                "symbol": sym,
-                "ticker": sym + ".NS",
-                "rank":   r.get("rank",  i),
-                "score":  r.get("composite_score"),
-                "price":  r.get("price"),
-            })
-
-        result["ml"] = {
-            "as_of":    _ml_bt_cache["rebalance_history"][-1].get("date") if _ml_bt_cache and _ml_bt_cache.get("rebalance_history") else _ml_rank_cache.get("as_of"),
-            "holdings": holdings,
-        }
+    if _min_bt_cache:
+        rh_min = _min_bt_cache.get("rebalance_history", [])
+        if rh_min:
+            last_min = rh_min[-1]
+            # Build RS rating and price lookup from current_screen
+            screen_map = {s["symbol"]: s for s in _min_bt_cache.get("current_screen", [])}
+            holdings = []
+            for sym_ns in last_min.get("holdings", []):
+                sym = sym_ns.replace(".NS", "")
+                sc = screen_map.get(sym, {})
+                holdings.append({
+                    "symbol":    sym,
+                    "ticker":    sym_ns,
+                    "rs_rating": sc.get("rs_rating"),
+                    "price":     sc.get("price"),
+                })
+            result["minervini"] = {
+                "as_of":    last_min.get("date"),
+                "holdings": holdings,
+            }
 
     if _mom_bt_cache:
         rh = _mom_bt_cache.get("rebalance_history", [])
