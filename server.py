@@ -14,6 +14,10 @@ Endpoints:
   GET  /api/momentum/backtest/result  — latest cached momentum backtest result
   GET  /api/momentum/backtest/status  — running / has_result
 
+  POST /api/minervini/backtest/run    — launch Minervini SEPA backtest
+  GET  /api/minervini/backtest/result — latest cached Minervini backtest result
+  GET  /api/minervini/backtest/status — running / has_result
+
   GET  /api/kite/status               — Kite connection status
   GET  /api/kite/login                — redirect to Kite OAuth login page
   GET  /api/kite/callback             — OAuth callback
@@ -56,6 +60,11 @@ _ml_bt_progress: dict = {"step": 0, "total": 6, "msg": ""}
 _mom_bt_cache: dict    = db.get_latest_backtest(strategy="momentum")
 _mom_bt_running: bool  = False
 _mom_bt_progress: dict = {"step": 0, "total": 5, "msg": ""}
+
+_min_bt_cache: dict    = db.get_latest_backtest(strategy="minervini")
+_min_bt_running: bool  = False
+_min_bt_progress: dict = {"step": 0, "total": 5, "msg": ""}
+
 _ml_rank_cache: dict = db.get_latest_rank_snapshot()
 _ml_rank_ts:    float = 0.0   # force a fresh fetch on first request
 _ML_RANK_TTL    = 300         # seconds
@@ -178,6 +187,57 @@ def momentum_backtest_result():
 def momentum_backtest_status():
     return {"running": _mom_bt_running, "has_result": bool(_mom_bt_cache),
             "progress": _mom_bt_progress}
+
+
+# ── Minervini SEPA backtest ───────────────────────────────────────────────────
+
+class MinerviniParams(BaseModel):
+    years:    int   = 5
+    top_n:    int   = 20
+    cost_bps: float = 20
+
+
+@app.post("/api/minervini/backtest/run")
+async def minervini_backtest_run(params: MinerviniParams):
+    global _min_bt_running
+    if _min_bt_running:
+        raise HTTPException(409, "Minervini backtest already running")
+    import minervini as mv
+
+    def _run():
+        global _min_bt_running, _min_bt_cache, _min_bt_progress
+        _min_bt_running = True
+        _min_bt_progress = {"step": 0, "total": 5, "msg": "Starting…"}
+        def _on_progress(step, total, msg):
+            _min_bt_progress.update({"step": step, "total": total, "msg": msg})
+        try:
+            result = mv.run_backtest(
+                years=params.years, top_n=params.top_n, cost_bps=params.cost_bps,
+                progress_cb=_on_progress,
+            )
+            _min_bt_cache = result
+            db.save_backtest(params.years, params.top_n, params.cost_bps, result,
+                             strategy="minervini")
+            return result
+        finally:
+            _min_bt_running = False
+
+    loop   = asyncio.get_event_loop()
+    result = await loop.run_in_executor(_executor, _run)
+    return result
+
+
+@app.get("/api/minervini/backtest/result")
+def minervini_backtest_result():
+    if not _min_bt_cache:
+        raise HTTPException(404, "No Minervini backtest result — run one first")
+    return _min_bt_cache
+
+
+@app.get("/api/minervini/backtest/status")
+def minervini_backtest_status():
+    return {"running": _min_bt_running, "has_result": bool(_min_bt_cache),
+            "progress": _min_bt_progress}
 
 
 # ── Kite auth ────────────────────────────────────────────────────────────────
