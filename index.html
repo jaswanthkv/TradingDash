@@ -64,13 +64,12 @@ a{color:inherit;text-decoration:none}
 .tab:hover:not(.active){color:var(--t4)}
 .tab-pane{display:none}.tab-pane.active{display:block}
 
-/* ── sub-tabs (within ML tab) ── */
+/* ── sub-tabs ── */
 .sub-tab-bar{background:var(--bg-alt);border-bottom:1px solid var(--border);display:flex;padding:0 20px}
 .sub-tab{padding:9px 14px;font-size:11px;font-weight:600;color:var(--t3);border:none;background:none;
   cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
 .sub-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .sub-tab:hover:not(.active){color:var(--t4)}
-.ml-pane{display:none}.ml-pane.active{display:block}
 .min-pane{display:none}.min-pane.active{display:block}
 
 /* ── home page ── */
@@ -375,7 +374,6 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
 <div class="tab-bar">
   <button class="tab active" onclick="switchTab('home',this)">Home</button>
   <button class="tab" onclick="switchTab('portfolio',this)" id="tabPortfolio">Portfolio</button>
-  <button class="tab" onclick="switchTab('ml',this)">ML Strategy</button>
   <button class="tab" onclick="switchTab('momentum',this)">Momentum</button>
   <button class="tab" onclick="switchTab('minervini',this)">Minervini</button>
   <button class="tab" onclick="switchTab('ha',this)">Pulse</button>
@@ -391,19 +389,6 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   </div>
 
   <div class="strategy-grid">
-
-    <!-- ML Strategy card -->
-    <div class="s-card" onclick="goToTab('ml')">
-      <div class="s-card-icon">🤖</div>
-      <div class="s-card-name">ML Strategy</div>
-      <div class="s-card-desc">Finds the strongest stocks in the universe before they move. Scores. Ranks. Rebalances monthly.</div>
-      <div class="s-card-tags">
-        <span class="s-tag">NSE Microcap</span>
-        <span class="s-tag">Monthly</span>
-      </div>
-      <div class="s-sparkline" id="spark-ml"></div>
-      <button class="s-card-cta">Open ML Strategy →</button>
-    </div>
 
     <!-- Momentum card -->
     <div class="s-card" onclick="goToTab('momentum')">
@@ -592,208 +577,6 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
         </div>
 
       </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- ════════════════════ ML STRATEGY TAB ════════════════════ -->
-<div class="tab-pane" id="tab-ml">
-
-  <!-- sub-tab bar -->
-  <div class="sub-tab-bar">
-    <button class="sub-tab active" onclick="switchMLTab('backtest',this)">Backtest</button>
-    <button class="sub-tab" onclick="switchMLTab('rankings',this)">Rankings</button>
-    <button class="sub-tab" onclick="switchMLTab('rebalancing',this)">Rebalancing</button>
-  </div>
-
-  <!-- ── ML: Backtest sub-pane ── -->
-  <div class="ml-pane active" id="ml-backtest">
-
-    <div class="param-row">
-      <div class="param-group">
-        <label>Years</label>
-        <select id="p-years">
-          <option value="3">3 years</option>
-          <option value="5" selected>5 years</option>
-          <option value="7">7 years</option>
-          <option value="10">10 years</option>
-        </select>
-      </div>
-      <div class="param-sep">·</div>
-      <div class="param-group">
-        <label>Top N</label>
-        <select id="p-topn">
-          <option value="10">10</option>
-          <option value="20" selected>20</option>
-          <option value="30">30</option>
-        </select>
-      </div>
-      <div class="param-sep">·</div>
-      <div class="param-group">
-        <label>Cost (bps)</label>
-        <input id="p-cost" type="number" value="20" min="0" max="100" style="width:60px"/>
-      </div>
-      <div class="param-sep">·</div>
-      <button class="btn btn-primary" id="btnRun" onclick="runBacktest()">▶ Run Backtest</button>
-      <div id="btStatus" class="hidden" style="display:flex;align-items:center;gap:8px">
-        <div class="spinner"></div>
-        <span class="status-text" id="btStatusMsg">Running…</span>
-        <div class="progress-bar-wrap" style="width:120px">
-          <div class="progress-bar-fill" id="btProgress" style="width:0%"></div>
-        </div>
-      </div>
-    </div>
-
-    <div id="btEmpty" class="page">
-      <div class="empty">
-        <div class="empty-icon">📊</div>
-        <div class="empty-title">No backtest result yet</div>
-        <div class="empty-sub">Click <strong>Run Backtest</strong> to compute the ML strategy performance.<br>
-          First run takes ~60–90 s while data downloads. Results are cached.</div>
-      </div>
-    </div>
-
-    <div id="btResults" class="hidden">
-      <div class="page" style="display:grid;gap:16px">
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">Portfolio Growth (₹1 invested)</span>
-            <div style="display:flex;gap:16px;font-size:11px;color:#6b7280">
-              <span><span style="color:#6366f1">●</span> ML Strategy</span>
-              <span><span style="color:#94a3b8">●</span> Nifty 500</span>
-            </div>
-          </div>
-          <div class="chart-wrap"><canvas id="growthChart"></canvas></div>
-        </div>
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">Monthly Returns Heatmap — Strategy vs Nifty 500</span>
-            <span style="font-size:11px;color:#94a3b8">green = positive · red = negative</span>
-          </div>
-          <div class="card-body" style="padding:0">
-            <div class="heatmap-wrap" id="heatmapWrap"></div>
-          </div>
-        </div>
-        <div class="two-col">
-          <div class="card">
-            <div class="card-head"><span class="card-title">Rolling 12-Month Alpha vs Nifty 500</span></div>
-            <div class="chart-wrap"><canvas id="alphaChart"></canvas></div>
-          </div>
-          <div class="card">
-            <div class="card-head"><span class="card-title">Drawdown (Strategy)</span></div>
-            <div class="chart-wrap"><canvas id="ddChart"></canvas></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── ML: Rankings sub-pane ── -->
-  <div class="ml-pane" id="ml-rankings">
-    <div class="section-head">
-      <span class="section-title">Current ML Rankings</span>
-      <button class="btn btn-ghost btn-sm" onclick="loadRankings(true)">↺ Refresh</button>
-    </div>
-    <div id="rankEmpty" class="page">
-      <div class="empty">
-        <div class="empty-icon">⚙️</div>
-        <div class="empty-title">Computing rankings…</div>
-        <div class="empty-sub">Downloading data and scoring all universe stocks.<br>Takes ~20 seconds.</div>
-      </div>
-    </div>
-    <div id="rankResults" class="hidden">
-      <div class="factor-legend" id="factorLegend"></div>
-      <div class="tbl-wrap">
-        <table id="rankTable">
-          <thead>
-            <tr>
-              <th onclick="sortTable(0)" style="text-align:left"># Ticker</th>
-              <th onclick="sortTable(1)" class="tt" data-tip="Composite ML score (0–100)">Score</th>
-              <th onclick="sortTable(2)" class="tt" data-tip="12-month return skipping last month">12M Mom</th>
-              <th onclick="sortTable(3)" class="tt" data-tip="6-month return skipping last month">6M Mom</th>
-              <th onclick="sortTable(4)" class="tt" data-tip="3-month excess return vs Nifty 50">RS Nifty</th>
-              <th onclick="sortTable(5)" class="tt" data-tip="EMA5>EMA10>SMA20>SMA50 stack score (0–4)">Trend</th>
-              <th onclick="sortTable(6)" class="tt" data-tip="63-day rolling Sharpe ratio">Sharpe 3M</th>
-              <th onclick="sortTable(7)" class="tt" data-tip="Volume 5d avg / 60d avg">Vol Exp</th>
-              <th onclick="sortTable(8)" class="tt" data-tip="Low volatility score (inverse 20d vol)">Low Vol</th>
-              <th>Price ₹</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="rankBody"></tbody>
-        </table>
-      </div>
-      <div style="padding:10px 16px;font-size:11px;color:#94a3b8">
-        Showing top 50 · <span id="rankEligible"></span> eligible · <span id="rankUniverse"></span> universe ·
-        <span id="rankAsOf"></span>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── ML: Rebalancing sub-pane ── -->
-  <div class="ml-pane" id="ml-rebalancing">
-
-    <!-- Trade panel -->
-    <div class="page" style="padding-bottom:0">
-      <div class="trade-panel" id="mlTradePanel">
-        <div class="trade-panel-head">
-          <span class="trade-panel-title">⚡ Execute Rebalance via Kite</span>
-          <span style="font-size:11px;color:#94a3b8">Latest rebalance only · CNC Market orders</span>
-        </div>
-        <div style="padding:14px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-          <div class="param-group">
-            <label>Mode</label>
-            <select id="ml-trade-mode" onchange="_updatePerStockLabel('ml')">
-              <option value="fresh">Fresh Start</option>
-              <option value="rebalance">Rebalance</option>
-            </select>
-          </div>
-          <div class="param-sep">·</div>
-          <div class="param-group">
-            <label>Total Capital (₹)</label>
-            <input id="ml-capital" type="number" value="1000000" step="100000" min="100000" style="width:130px" oninput="_updatePerStockLabel('ml')"/>
-          </div>
-          <div style="font-size:11px;color:#64748b" id="ml-per-stock-label">₹50,000 per stock (20 stocks)</div>
-          <button class="btn btn-ghost btn-sm" onclick="previewOrders('ml')">Preview Orders</button>
-          <span id="mlTradeStatus" style="font-size:11px;color:#94a3b8"></span>
-        </div>
-        <div id="mlOrderPreview" class="hidden">
-          <div id="mlOrderRows"></div>
-          <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
-            border-top:1px solid #f1f5f9;background:#f8fafc">
-            <div style="font-size:12px;color:#64748b" id="mlOrderSummary"></div>
-            <button class="btn btn-primary btn-sm" onclick="executeOrders('ml')" id="mlExecBtn">
-              Execute All Orders
-            </button>
-          </div>
-          <div class="trade-warning">
-            ⚠️ Market orders will be placed immediately on Kite. Only run during market hours (9:15 AM – 3:30 PM). This action is irreversible.
-          </div>
-        </div>
-        <div id="mlOrderResults" class="hidden">
-          <div id="mlResultRows"></div>
-          <div style="padding:10px 16px;font-size:12px;color:#64748b;border-top:1px solid #f1f5f9;
-            background:#f8fafc" id="mlResultSummary"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section-head">
-      <span class="section-title">Rebalancing History</span>
-      <span id="histMeta" style="font-size:11px;color:#94a3b8"></span>
-    </div>
-    <div id="histEmpty" class="page">
-      <div class="empty">
-        <div class="empty-icon">📅</div>
-        <div class="empty-title">Run a backtest first</div>
-        <div class="empty-sub">Rebalancing history is generated during the backtest.</div>
-      </div>
-    </div>
-    <div id="histResults" class="hidden" style="display:grid;grid-template-columns:1fr 2fr;gap:0">
-      <div style="border-right:1px solid #e2e8f0;overflow-y:auto;max-height:calc(100vh - 200px)"
-           id="histList"></div>
-      <div id="histDetail" style="overflow-y:auto;max-height:calc(100vh - 200px)"></div>
     </div>
   </div>
 
@@ -1237,16 +1020,11 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const API = '';
-let _btData   = null;
-let _rankData = null;
 const show = id => document.getElementById(id)?.classList.remove('hidden');
 const hide = id => document.getElementById(id)?.classList.add('hidden');
 let _growthChart = null, _alphaChart = null, _ddChart = null;
 let _sortDir = {}, _sortCol = -1;
-let _rankLoadedAt = 0;
-const RANK_TTL_MS = 5 * 60 * 1000;
 let _activeTab   = 'home';
-let _activeMLTab = 'backtest';
 let _refreshTimer = null;
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
@@ -1284,31 +1062,7 @@ function switchTab(name, el) {
     if (window._minData) renderKPIs(window._minData);
     clearTimeout(_pulseRefreshTimer);
     clearInterval(_pulseCountdownTimer);
-  } else if (name === 'ml') {
-    _restoreKPILabels();
-    if (_btData) renderKPIs(_btData);
-    if (_activeMLTab === 'rankings') {
-      const stale = (Date.now() - _rankLoadedAt) > RANK_TTL_MS;
-      if (!_rankData || stale) loadRankings(false);
-    }
-    if (_activeMLTab === 'rebalancing' && _btData) renderHistory(_btData);
-    clearTimeout(_pulseRefreshTimer);
-    clearInterval(_pulseCountdownTimer);
   }
-}
-
-function switchMLTab(name, el) {
-  document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.ml-pane').forEach(p => p.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('ml-' + name).classList.add('active');
-  _activeMLTab = name;
-
-  if (name === 'rankings') {
-    const stale = (Date.now() - _rankLoadedAt) > RANK_TTL_MS;
-    if (!_rankData || stale) loadRankings(false);
-  }
-  if (name === 'rebalancing' && _btData) renderHistory(_btData);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -1495,70 +1249,6 @@ function renderHeatmap(rows, benchRows, targetId = 'heatmapWrap') {
 }
 
 // ── Backtest ──────────────────────────────────────────────────────────────────
-async function runBacktest() {
-  const years    = +document.getElementById('p-years').value;
-  const topn     = +document.getElementById('p-topn').value;
-  const costBps  = +document.getElementById('p-cost').value;
-
-  document.getElementById('btnRun').disabled = true;
-  document.getElementById('btStatus').classList.remove('hidden');
-  document.getElementById('btStatus').style.display = 'flex';
-  document.getElementById('btEmpty').classList.add('hidden');
-  document.getElementById('btResults').classList.add('hidden');
-
-  const progEl = document.getElementById('btProgress');
-  const msgEl  = document.getElementById('btStatusMsg');
-
-  // Poll real backend progress every 3 seconds
-  const pollProgress = setInterval(async () => {
-    try {
-      const s = await fetch(API + '/api/ml/backtest/status').then(r => r.json());
-      if (s.progress && s.progress.total) {
-        const pct = Math.round((s.progress.step / s.progress.total) * 100);
-        progEl.style.width = pct + '%';
-        msgEl.textContent  = s.progress.msg || 'Running…';
-      }
-    } catch(_) {}
-  }, 3000);
-
-  try {
-    const res = await fetch(API + '/api/ml/backtest/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ years, top_n: topn, cost_bps: costBps }),
-    });
-    clearInterval(pollProgress);
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    _btData = data;
-    renderBacktest(data);
-    showToast(`ML backtest complete · ${data.params?.years}y`, 'success');
-  } catch(e) {
-    clearInterval(pollProgress);
-    msgEl.textContent = 'Error: ' + e.message;
-    showToast('ML backtest failed: ' + e.message, 'error');
-  } finally {
-    document.getElementById('btnRun').disabled = false;
-    document.getElementById('btStatus').style.display = 'none';
-  }
-}
-
-function renderBacktest(d) {
-  _btData = d;
-  document.getElementById('btEmpty').classList.add('hidden');
-  document.getElementById('btResults').classList.remove('hidden');
-  document.getElementById('navUpdated').textContent = 'Last run: ' + (d.run_at || '').replace('T',' ');
-  renderKPIs(d);
-  renderGrowthChart(d);
-  renderHeatmap(d.monthly_returns, d.monthly_bench);
-  if (d.current_top20?.length) {
-    _rankData = { rankings: d.current_top20, portfolio: d.current_top20.map(r=>r.ticker),
-      universe_size: d.params.universe_size, eligible_count: d.current_top20.length,
-      as_of: d.run_at?.split('T')[0], factor_labels: d.factor_labels };
-  }
-  drawSparkline('spark-ml', d.strategy_curve);
-}
-
 // ── Portfolio ─────────────────────────────────────────────────────────────────
 let _portData = null;
 let _dayData  = null;
@@ -1722,167 +1412,6 @@ function renderPortfolio(d) {
   }
 }
 
-// ── Rankings ──────────────────────────────────────────────────────────────────
-async function loadRankings(force=false) {
-  if (_rankData && !force) { renderRankings(_rankData); return; }
-  document.getElementById('rankEmpty').classList.remove('hidden');
-  document.getElementById('rankResults').classList.add('hidden');
-  document.getElementById('rankEmpty').querySelector('.empty-title').textContent = 'Computing rankings…';
-
-  try {
-    const data = await fetch(API + '/api/ml/rank').then(r => r.json());
-    _rankData     = data;
-    _rankLoadedAt = Date.now();
-    renderRankings(data);
-  } catch(e) {
-    document.getElementById('rankEmpty').querySelector('.empty-title').textContent = 'Failed: ' + e.message;
-  }
-}
-
-function renderRankings(d) {
-  document.getElementById('rankEmpty').classList.add('hidden');
-  document.getElementById('rankResults').classList.remove('hidden');
-
-  const portSet = new Set(d.portfolio || []);
-  const rows    = d.rankings || [];
-  const labels  = d.factor_labels || {};
-  const weights = d.factor_weights || {};
-
-  document.getElementById('factorLegend').innerHTML =
-    Object.entries(labels).map(([k,lbl]) =>
-      `<div class="fl-item"><div class="fl-dot"></div>
-       <strong>${lbl}</strong> <span>(${Math.round((weights[k]||0)*100)}%)</span></div>`
-    ).join('');
-
-  const tbody = document.getElementById('rankBody');
-  tbody.innerHTML = rows.map(r => {
-    const inPort = portSet.has(r.ticker);
-    const sym    = r.ticker.replace('.NS','');
-    const score  = r.composite_score ?? 0;
-    const pct12  = r.mom_12_1 != null ? (r.mom_12_1*100).toFixed(1) : '—';
-    const pct6   = r.mom_6_1  != null ? (r.mom_6_1 *100).toFixed(1) : '—';
-    const rsN    = r.rs_nifty != null ? (r.rs_nifty*100).toFixed(1) : '—';
-    const trend  = r.trend    != null ? r.trend.toFixed(1) : '—';
-    const sh3m   = r.sharpe_3m!= null ? r.sharpe_3m.toFixed(2) : '—';
-    const volexp = r.vol_exp  != null ? r.vol_exp.toFixed(2)  : '—';
-    const ivol   = r.inv_vol  != null ? (r.inv_vol*-100).toFixed(1) : '—';
-    const price  = r.price    != null ? '₹'+r.price.toLocaleString('en-IN',{maximumFractionDigits:1}) : '—';
-    return `<tr class="${inPort ? 'in-portfolio' : ''}">
-      <td><span class="rank-badge">${r.rank}</span>${sym}</td>
-      <td><div class="score-bar"><span>${score.toFixed(1)}</span>
-        <div class="score-bg"><div class="score-fill" style="width:${score}%"></div></div></div></td>
-      <td class="${pct12!=='—'&&+pct12>=0?'g':'r'}">${pct12}%</td>
-      <td class="${pct6 !=='—'&&+pct6 >=0?'g':'r'}">${pct6}%</td>
-      <td class="${rsN  !=='—'&&+rsN  >=0?'g':'r'}">${rsN}%</td>
-      <td>${trend}/4</td>
-      <td class="${sh3m!=='—'&&+sh3m>=0?'g':'r'}">${sh3m}</td>
-      <td class="${volexp!=='—'&&+volexp>=1?'g':''}">${volexp}x</td>
-      <td>${ivol}%</td>
-      <td class="d">${price}</td>
-      <td>${inPort ? '<span style="color:#4f46e5;font-size:10px;font-weight:700">● HOLD</span>'
-                   : '<span style="color:#94a3b8;font-size:10px">WATCH</span>'}</td>
-    </tr>`;
-  }).join('');
-
-  document.getElementById('rankEligible').textContent = d.eligible_count ?? '—';
-  document.getElementById('rankUniverse').textContent  = d.universe_size  ?? '—';
-  document.getElementById('rankAsOf').textContent      = 'as of ' + (d.as_of ?? '—');
-}
-
-// ── Table sort ────────────────────────────────────────────────────────────────
-function sortTable(col) {
-  const headers = document.querySelectorAll('#rankTable thead th');
-  headers.forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
-  const rows = Array.from(document.getElementById('rankBody').querySelectorAll('tr'));
-  _sortDir[col] = !_sortDir[col];
-  rows.sort((a, b) => {
-    const ta = a.cells[col].textContent.replace(/[^0-9.\-]/g,'');
-    const tb = b.cells[col].textContent.replace(/[^0-9.\-]/g,'');
-    const va = parseFloat(ta), vb = parseFloat(tb);
-    const diff = isNaN(va) || isNaN(vb) ? ta.localeCompare(tb) : va - vb;
-    return _sortDir[col] ? diff : -diff;
-  });
-  rows.forEach(r => document.getElementById('rankBody').appendChild(r));
-  if (headers[col]) headers[col].classList.add(_sortDir[col] ? 'sort-asc' : 'sort-desc');
-}
-
-// ── Rebalance history ─────────────────────────────────────────────────────────
-function renderHistory(d) {
-  const log = (d.rebalance_history || []).slice().reverse();
-  if (!log.length) return;
-  document.getElementById('histEmpty').classList.add('hidden');
-  document.getElementById('histResults').classList.remove('hidden');
-  document.getElementById('histMeta').textContent =
-    `${log.length} rebalances · avg turnover ${
-      (log.reduce((s,r)=>s+r.turnover_pct,0)/log.length).toFixed(1)}%`;
-
-  document.getElementById('histList').innerHTML = log.map((r, i) => {
-    const cls = r.period_ret_pct >= 0 ? 'g' : 'r';
-    return `<div class="reblog-item" style="cursor:pointer" onclick="showHistDetail(${i})">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div class="reblog-date">${r.date}</div>
-        <div class="reblog-stat ${cls}" style="font-weight:700">${r.period_ret_pct >= 0 ? '+' : ''}${r.period_ret_pct.toFixed(1)}%</div>
-      </div>
-      <div class="reblog-stat">
-        Turnover: ${r.turnover_pct.toFixed(0)}% ·
-        +${r.added.length} in / −${r.removed.length} out ·
-        Nifty: ${r.bench_ret_pct >= 0 ? '+' : ''}${r.bench_ret_pct.toFixed(1)}%
-      </div>
-    </div>`;
-  }).join('');
-
-  window._histLog = log;
-  if (log.length) showHistDetail(0);
-}
-
-function showHistDetail(idx) {
-  const r = window._histLog[idx];
-  if (!r) return;
-  const alpha = r.period_ret_pct - r.bench_ret_pct;
-  document.getElementById('histDetail').innerHTML = `
-    <div style="padding:20px">
-      <div style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:12px">${r.date}</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
-        ${statCard('Return', pct(r.period_ret_pct), r.period_ret_pct >= 0 ? '#16a34a' : '#dc2626')}
-        ${statCard('Nifty Return', pct(r.bench_ret_pct), '#6366f1')}
-        ${statCard('Alpha', pct(alpha,1), alpha >= 0 ? '#16a34a' : '#dc2626')}
-        ${statCard('Turnover', r.turnover_pct.toFixed(0) + '%', '#64748b')}
-      </div>
-      ${r.added.length ? `
-        <div style="margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;
-            letter-spacing:.07em;margin-bottom:6px">Added (${r.added.length})</div>
-          <div class="reblog-chips">${r.added.map(t =>
-            `<span class="chip chip-add">${t.replace('.NS','')}</span>`).join('')}</div>
-        </div>` : ''}
-      ${r.removed.length ? `
-        <div style="margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;
-            letter-spacing:.07em;margin-bottom:6px">Removed (${r.removed.length})</div>
-          <div class="reblog-chips">${r.removed.map(t =>
-            `<span class="chip chip-rem">${t.replace('.NS','')}</span>`).join('')}</div>
-        </div>` : ''}
-      <div>
-        <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;
-          letter-spacing:.07em;margin-bottom:6px">Holdings (${r.holdings.length})</div>
-        <div class="reblog-chips">${r.holdings.map(t =>
-          `<span class="chip chip-hold">${t.replace('.NS','')}</span>`).join('')}</div>
-      </div>
-      ${r.top5?.length ? `
-        <div style="margin-top:16px">
-          <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;
-            letter-spacing:.07em;margin-bottom:8px">Top 5 Ranked Stocks</div>
-          ${r.top5.map((s,i) => `
-            <div style="display:flex;justify-content:space-between;align-items:center;
-              padding:6px 0;border-bottom:1px solid #f1f5f9">
-              <div><span class="rank-badge">${i+1}</span>
-                <span style="color:#1e293b;font-weight:600">${s.ticker.replace('.NS','')}</span></div>
-              <div style="color:#6366f1;font-weight:700">${s.composite_score.toFixed(1)}</div>
-            </div>`).join('')}
-        </div>` : ''}
-    </div>`;
-}
-
 function statCard(label, val, color) {
   return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
     <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">${label}</div>
@@ -1902,36 +1431,19 @@ function nextRebalanceDate() {
 
 function updateRefreshUI() {
   const rb    = nextRebalanceDate();
-  const stale = _rankLoadedAt ? Math.floor((Date.now() - _rankLoadedAt) / 1000) : null;
-  let staleTxt = '';
-  if (stale !== null) {
-    if (stale < 60)        staleTxt = `Rankings: ${stale}s ago`;
-    else if (stale < 3600) staleTxt = `Rankings: ${Math.floor(stale/60)}m ago`;
-    else                   staleTxt = `Rankings: ${Math.floor(stale/3600)}h ago`;
-  }
   const nextIn = rb.days > 0 ? `${rb.days}d ${rb.hours}h` : `${rb.hours}h`;
   document.getElementById('navUpdated').innerHTML =
-    `<span style="color:#94a3b8">Next rebalance: <strong style="color:#6366f1">${rb.date}</strong>
-    (${nextIn})</span>${staleTxt ? ` &nbsp;·&nbsp; <span style="color:#94a3b8">${staleTxt}</span>` : ''}`;
+    `<span style="color:#94a3b8">Next rebalance: <strong style="color:#6366f1">${rb.date}</strong> (${nextIn})</span>`;
 }
 
 function scheduleRefresh() {
   clearInterval(_refreshTimer);
   _refreshTimer = setInterval(() => {
-    if (_activeTab === 'ml' && _activeMLTab === 'rankings') {
-      const stale = (Date.now() - _rankLoadedAt) > RANK_TTL_MS;
-      if (stale) loadRankings(false);
-    }
     updateRefreshUI();
   }, 30_000);
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' &&
-      _activeTab === 'ml' && _activeMLTab === 'rankings') {
-    const stale = (Date.now() - _rankLoadedAt) > RANK_TTL_MS;
-    if (stale) loadRankings(false);
-  }
   updateRefreshUI();
 });
 
@@ -2291,12 +1803,18 @@ function renderMomHistory(d) {
 
   document.getElementById('momHistList').innerHTML = log.map((r, i) => {
     const cls = r.period_ret_pct >= 0 ? 'g' : 'r';
+    const addChips = r.added.map(t =>
+      `<span class="chip chip-add" style="font-size:9px;padding:1px 5px">${t.replace('.NS','')}</span>`).join('');
+    const remChips = r.removed.map(t =>
+      `<span class="chip chip-rem" style="font-size:9px;padding:1px 5px">${t.replace('.NS','')}</span>`).join('');
     return `<div class="reblog-item" style="cursor:pointer" onclick="showMomDetail(${i})">
-      <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <div class="reblog-date">${r.date}</div>
         <div class="reblog-stat ${cls}" style="font-weight:700">${r.period_ret_pct >= 0 ? '+' : ''}${r.period_ret_pct.toFixed(1)}%</div>
       </div>
-      <div class="reblog-stat">+${r.added.length} in / −${r.removed.length} out · Turnover: ${r.turnover_pct.toFixed(0)}%</div>
+      ${addChips ? `<div style="margin-bottom:3px">${addChips}</div>` : ''}
+      ${remChips ? `<div style="margin-bottom:3px">${remChips}</div>` : ''}
+      <div class="reblog-stat" style="font-size:10px;color:#94a3b8">Turnover ${r.turnover_pct.toFixed(0)}% · Nifty ${r.bench_ret_pct >= 0 ? '+' : ''}${r.bench_ret_pct.toFixed(1)}%</div>
     </div>`;
   }).join('');
 
@@ -2559,23 +2077,15 @@ async function closePulsePosition(tradingsymbol, qty) {
 // ── Order execution ───────────────────────────────────────────────────────────
 
 function _updatePerStockLabel(strategy) {
-  if (strategy === 'ml') {
-    const cap   = +document.getElementById('ml-capital').value || 0;
-    const topn  = +document.getElementById('p-topn').value || 20;
-    const per   = cap / topn;
-    document.getElementById('ml-per-stock-label').textContent =
-      `₹${Math.round(per).toLocaleString('en-IN')} per stock (${topn} stocks)`;
-  } else {
-    const cap  = +document.getElementById('mom-capital').value || 0;
-    const m    = +document.getElementById('mp-m').value || 8;
-    const per  = cap / m;
-    document.getElementById('mom-per-stock-label').textContent =
-      `₹${Math.round(per).toLocaleString('en-IN')} per stock (${m} stocks)`;
-  }
+  const cap  = +document.getElementById('mom-capital').value || 0;
+  const m    = +document.getElementById('mp-m').value || 8;
+  const per  = cap / m;
+  document.getElementById('mom-per-stock-label').textContent =
+    `₹${Math.round(per).toLocaleString('en-IN')} per stock (${m} stocks)`;
 }
 
 function _getRebalanceLog(strategy) {
-  const log = strategy === 'ml' ? window._histLog : window._momLog;
+  const log = window._momLog;
   return log && log.length ? log[0] : null;  // log[0] is already latest (reversed)
 }
 
@@ -2611,12 +2121,10 @@ function _renderResultRows(results, containerId) {
 }
 
 function _tradeParams(strategy) {
-  const pfx    = strategy === 'ml' ? 'ml' : 'mom';
+  const pfx    = 'mom';
   const mode   = document.getElementById(`${pfx}-trade-mode`).value;
   const cap    = +document.getElementById(`${pfx}-capital`).value;
-  const stocks = strategy === 'ml'
-    ? (+document.getElementById('p-topn').value || 20)
-    : (+document.getElementById('mp-m').value || 8);
+  const stocks = +document.getElementById('mp-m').value || 8;
   const r = _getRebalanceLog(strategy);
   if (!r) return null;
 
@@ -2629,7 +2137,7 @@ async function previewOrders(strategy) {
   const p = _tradeParams(strategy);
   if (!p) { alert('Run a backtest first to generate a rebalance log.'); return; }
 
-  const pfx      = strategy === 'ml' ? 'ml' : 'mom';
+  const pfx      = 'mom';
   const statusEl = document.getElementById(`${pfx}TradeStatus`);
   statusEl.textContent = 'Fetching prices…';
 
@@ -2642,7 +2150,6 @@ async function previewOrders(strategy) {
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
 
-    const pfx = strategy === 'ml' ? 'ml' : 'mom';
     _renderOrderRows(data.orders, `${pfx}OrderRows`);
 
     const s = data.summary;
@@ -2672,7 +2179,7 @@ async function executeOrders(strategy) {
   const p = _tradeParams(strategy);
   if (!p) return;
 
-  const pfx      = strategy === 'ml' ? 'ml' : 'mom';
+  const pfx      = 'mom';
   const execBtn  = document.getElementById(`${pfx}ExecBtn`);
   const statusEl = document.getElementById(`${pfx}TradeStatus`);
   execBtn.disabled = true;
@@ -2976,7 +2483,7 @@ function round4(v) { return Math.round(v * 10000) / 10000; }
 
 async function init() {
   initDark();
-  const validTabs = ['home', 'portfolio', 'ml', 'momentum', 'minervini', 'ha'];
+  const validTabs = ['home', 'portfolio', 'momentum', 'minervini', 'ha'];
   const hashTab = window.location.hash.slice(1);
   if (hashTab && validTabs.includes(hashTab)) goToTab(hashTab);
 
@@ -2989,11 +2496,6 @@ async function init() {
   document.getElementById('ha-to').value   = today;
 
   // Load cached results in background
-  try {
-    const res = await fetch(API + '/api/ml/backtest/result');
-    if (res.ok) renderBacktest(await res.json());
-  } catch(_) {}
-
   try {
     const res = await fetch(API + '/api/momentum/backtest/result');
     if (res.ok) renderMomentum(await res.json());
