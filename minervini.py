@@ -201,7 +201,7 @@ def run_backtest(
         # Stocks passing all 9 SEPA criteria with valid RS
         passing = [
             t for t in stocks
-            if t in pass_row.index and pass_row.get(t) is True
+            if t in pass_row.index and bool(pass_row.get(t))
             and t in rs_row.index  and pd.notna(rs_row.get(t))
         ]
 
