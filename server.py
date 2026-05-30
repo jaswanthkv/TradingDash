@@ -1,721 +1,615 @@
 """
-server.py — FastAPI backend. Single process serves UI + all API endpoints.
+server.py — FastAPI backend for the ML Strategy dashboard.
 
 Endpoints:
-  GET  /                      — TradeBoard dashboard (index.html)
-  GET  /api/positions          — live P&L + 5MA status for all open positions
-  GET  /api/portfolio          — header stats (invested %, P&L, risk, locked)
-  GET  /api/chart/{ticker}     — OHLCV + EMA5 data for candlestick chart
-  POST /api/scan               — run universe scan + Claude picks (~30-60s)
-  POST /api/apply              — commit rebalance to open_positions.json
-  GET  /api/stream             — SSE live price updates every 60s
-  GET  /api/tradelog           — historical closed trades
+  GET  /                              — dashboard (index.html)
 
-  GET  /api/kite/status        — Kite connection status
-  GET  /api/kite/login         — redirect to Kite OAuth login
-  GET  /api/kite/callback      — OAuth callback (exchanges request_token)
-  GET  /api/kite/margins       — available equity margin
-  GET  /api/kite/quote/{ticker}— live quote from Kite
-  GET  /api/kite/market        — market open/closed status
-  POST /api/kite/order/buy     — place CNC buy (+ optional SL-M)
-  POST /api/kite/order/sell    — place CNC sell
-  GET  /api/kite/orders        — today's orders
-  GET  /api/kite/order/{id}    — single order status
+  POST /api/ml/backtest/run           — launch walk-forward ML backtest (~60–90s)
+  GET  /api/ml/backtest/result        — latest cached ML backtest result
+  GET  /api/ml/backtest/status        — running / has_result
+  GET  /api/ml/backtest/history       — all past ML runs (params + timestamp)
+  GET  /api/ml/rank                   — current ML rankings (cached 5 min)
+
+  POST /api/momentum/backtest/run     — launch momentum backtest (~30–60s)
+  GET  /api/momentum/backtest/result  — latest cached momentum backtest result
+  GET  /api/momentum/backtest/status  — running / has_result
+
+  GET  /api/kite/status               — Kite connection status
+  GET  /api/kite/login                — redirect to Kite OAuth login page
+  GET  /api/kite/callback             — OAuth callback
+  POST /api/ha/backtest/run           — launch HA 30-min backtest (needs Kite)
+  GET  /api/ha/backtest/result        — latest HA backtest result
+  GET  /api/ha/backtest/status        — running / has_result
 """
-import json, os, datetime, warnings, asyncio
+import asyncio
+import calendar
+import os
+import time
+import warnings
 from concurrent.futures import ThreadPoolExecutor
+
 warnings.filterwarnings("ignore")
 
 import pandas as pd
-import yfinance as yf
+from datetime import date, timedelta
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
-import engine
-from config import CAPITAL, PRICE_CACHE_TTL, SSE_INTERVAL, PORT, KITE_API_KEY
+import db
+import kite_auth
+from config import PORT, KITE_API_KEY
 
-# Kite is optional — app works without kiteconnect installed
-try:
-    import kite_auth, kite_orders
-    _KITE = True
-except ImportError:
-    _KITE = False
-
-app = FastAPI(title="TradeBoard")
+app = FastAPI(title="QuantDesk")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
 _executor = ThreadPoolExecutor(max_workers=4)
 
-# ── Price cache ───────────────────────────────────────────────────────────────
+# In-memory caches — seeded from DB on startup
+_ml_bt_cache: dict    = db.get_latest_backtest(strategy="ml")
+_ml_bt_running: bool  = False
+_ml_bt_progress: dict = {"step": 0, "total": 6, "msg": ""}
 
-_cache: dict[str, tuple[pd.DataFrame, datetime.datetime]] = {}
-
-
-def get_df(ticker: str, days: int = 120) -> pd.DataFrame | None:
-    entry = _cache.get(ticker)
-    if entry and (datetime.datetime.now() - entry[1]).seconds < PRICE_CACHE_TTL:
-        return entry[0]
-    end   = datetime.date.today()
-    start = end - datetime.timedelta(days=days)
-    try:
-        df = yf.download(ticker, start=str(start), end=str(end),
-                         auto_adjust=True, progress=False, threads=False)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        df = df.dropna(how="all")
-        if not df.empty:
-            _cache[ticker] = (df, datetime.datetime.now())
-            return df
-    except Exception:
-        pass
-    return None
+_mom_bt_cache: dict    = db.get_latest_backtest(strategy="momentum")
+_mom_bt_running: bool  = False
+_mom_bt_progress: dict = {"step": 0, "total": 5, "msg": ""}
+_ml_rank_cache: dict = db.get_latest_rank_snapshot()
+_ml_rank_ts:    float = 0.0   # force a fresh fetch on first request
+_ML_RANK_TTL    = 300         # seconds
 
 
-def enrich(pos: dict, df: pd.DataFrame) -> dict:
-    close        = df["Close"].squeeze()
-    ema5         = close.ewm(span=5,  adjust=False).mean()
-    ema10        = close.ewm(span=10, adjust=False).mean()
-    sma20        = close.rolling(20).mean()
-    cmp          = float(close.iloc[-1])
-    last_ema5    = float(ema5.iloc[-1])
-    last_ema10   = float(ema10.iloc[-1])
+# ── ML backtest ───────────────────────────────────────────────────────────────
 
-    below_ema10_now  = cmp < last_ema10
-    below_ema10_prev = float(close.iloc[-2]) < float(ema10.iloc[-2])
-    below_ema5_now   = cmp < last_ema5
+class MLBacktestParams(BaseModel):
+    years:    int   = 5
+    top_n:    int   = 20
+    cost_bps: float = 20
 
-    if below_ema10_now and below_ema10_prev:
-        urgency, status = "exit",    "10MA Break"
-    elif below_ema5_now:
-        urgency, status = "warning", "Below 5MA"
-    else:
-        urgency, status = "safe",    "10MA Safe"
 
-    days_above = 0
-    for i in range(len(close) - 1, -1, -1):
-        if float(close.iloc[i]) > float(ema10.iloc[i]):
-            days_above += 1
-        else:
-            break
+@app.post("/api/ml/backtest/run")
+async def ml_backtest_run(params: MLBacktestParams):
+    global _ml_bt_running
+    if _ml_bt_running:
+        raise HTTPException(409, "ML backtest already running")
+    import backtest_ml as btml
 
-    entry      = pos["entry_price"]
-    qty        = pos["qty"]
-    atr        = engine.compute_atr(df)
-    init_stop  = pos.get("initial_stop") or (entry - 2 * atr)
-    risk       = max(entry - init_stop, 0.01)
-    trail_stop = max(init_stop, last_ema10)
-    today_open = float(df["Open"].squeeze().iloc[-1])
-    holding    = (datetime.date.today() -
-                  datetime.date.fromisoformat(pos["entry_date"])).days
+    def _run():
+        global _ml_bt_running, _ml_bt_cache, _ml_bt_progress
+        _ml_bt_running = True
+        _ml_bt_progress = {"step": 0, "total": 6, "msg": "Starting…"}
+        def _on_progress(step, total, msg):
+            _ml_bt_progress.update({"step": step, "total": total, "msg": msg})
+        try:
+            result = btml.run_backtest(
+                years=params.years, top_n=params.top_n, cost_bps=params.cost_bps,
+                progress_cb=_on_progress,
+            )
+            _ml_bt_cache = result
+            db.save_backtest(params.years, params.top_n, params.cost_bps, result, strategy="ml")
+            return result
+        finally:
+            _ml_bt_running = False
 
-    return {
-        **pos,
-        "cmp":           round(cmp, 2),
-        "today_open":    round(today_open, 2),
-        "ema5":          round(last_ema5, 2),
-        "ema10":         round(float(ema10.iloc[-1]), 2),
-        "sma20":         round(float(sma20.iloc[-1]), 2),
-        "urgency":       urgency,
-        "ma_status":     status,
-        "days_above_5ma": days_above,
-        "init_stop":     round(init_stop, 2),
-        "trail_stop":    round(trail_stop, 2),
-        "r_multiple":    round((cmp - entry) / risk, 2),
-        "pnl_pct":       round((cmp - entry) / entry * 100, 2),
-        "day_pnl":       round((cmp - today_open) * qty, 2),
-        "day_pnl_pct":   round((cmp - today_open) / today_open * 100, 2),
-        "total_pnl":     round((cmp - entry) * qty, 2),
-        "current_value": round(cmp * qty, 2),
-        "holding_days":  holding,
-    }
-
-# ── GET /api/positions ────────────────────────────────────────────────────────
-
-def _placeholder(pos: dict) -> dict:
-    """Fallback when price data is unavailable — show position with entry price."""
-    entry   = pos["entry_price"]
-    stop    = pos.get("initial_stop") or round(entry * 0.95, 2)
-    holding = (datetime.date.today() -
-               datetime.date.fromisoformat(pos["entry_date"])).days
-    return {
-        **pos,
-        "cmp": entry, "today_open": entry,
-        "ema5": 0, "ema10": 0, "sma20": 0,
-        "urgency": "safe", "ma_status": "Loading…",
-        "days_above_5ma": 0,
-        "init_stop": stop, "trail_stop": stop,
-        "r_multiple": 0, "pnl_pct": 0,
-        "day_pnl": 0, "day_pnl_pct": 0, "total_pnl": 0,
-        "current_value": round(entry * pos["qty"], 2),
-        "holding_days": holding,
-    }
-
-@app.get("/api/positions")
-def api_positions():
-    out = []
-    for pos in engine.load_positions():
-        df = get_df(pos["ticker"])
-        out.append(enrich(pos, df) if (df is not None and len(df) >= 10)
-                   else _placeholder(pos))
-    return out
-
-# ── GET /api/portfolio ────────────────────────────────────────────────────────
-
-@app.get("/api/portfolio")
-def api_portfolio():
-    enriched = []
-    for pos in engine.load_positions():
-        df = get_df(pos["ticker"])
-        enriched.append(enrich(pos, df) if (df is not None and len(df) >= 10)
-                        else _placeholder(pos))
-    if not enriched:
-        return {
-            "pct_invested": 0, "invested_inr": 0, "capital_inr": CAPITAL,
-            "day_pnl": 0, "day_pnl_pct": 0, "total_pnl": 0, "total_pnl_pct": 0,
-            "open_risk_inr": 0, "open_risk_pct": 0, "locked_profit": 0,
-            "n_positions": 0, "exits_pending": 0,
-        }
-
-    invested      = sum(p["alloc_inr"]  for p in enriched)
-    day_pnl       = sum(p["day_pnl"]    for p in enriched)
-    total_pnl     = sum(p["total_pnl"]  for p in enriched)
-    open_risk     = sum(max(p["cmp"] - p["init_stop"], 0) * p["qty"] for p in enriched)
-    locked_profit = sum(
-        max(p["trail_stop"] - p["entry_price"], 0) * p["qty"]
-        for p in enriched if p["trail_stop"] > p["entry_price"]
-    )
-    exits_count = sum(1 for p in enriched if p["urgency"] == "exit")
-
-    return {
-        "pct_invested":   round(invested / CAPITAL * 100, 1),
-        "invested_inr":   round(invested),
-        "capital_inr":    CAPITAL,
-        "day_pnl":        round(day_pnl),
-        "day_pnl_pct":    round(day_pnl / invested * 100, 2) if invested else 0,
-        "total_pnl":      round(total_pnl),
-        "total_pnl_pct":  round(total_pnl / invested * 100, 2) if invested else 0,
-        "open_risk_inr":  round(open_risk),
-        "open_risk_pct":  round(open_risk / CAPITAL * 100, 1),
-        "locked_profit":  round(locked_profit),
-        "n_positions":    len(enriched),
-        "exits_pending":  exits_count,
-    }
-
-# ── GET /api/chart/{ticker} ───────────────────────────────────────────────────
-
-@app.get("/api/chart/{ticker}")
-def api_chart(ticker: str, days: int = 60):
-    df = get_df(ticker, days=days + 30)
-    if df is None:
-        return {"candles": [], "ema5": []}
-    df    = df.tail(days)
-    close = df["Close"].squeeze()
-    ema5  = close.ewm(span=5,  adjust=False).mean()
-    ema10 = close.ewm(span=10, adjust=False).mean()
-
-    candles = [{"time": ts.strftime("%Y-%m-%d"),
-                "open":  round(float(r["Open"]),  2),
-                "high":  round(float(r["High"]),  2),
-                "low":   round(float(r["Low"]),   2),
-                "close": round(float(r["Close"]), 2)}
-               for ts, r in df.iterrows()]
-
-    ema5_data  = [{"time": ts.strftime("%Y-%m-%d"), "value": round(float(v), 2)}
-                  for ts, v in ema5.items()]
-    ema10_data = [{"time": ts.strftime("%Y-%m-%d"), "value": round(float(v), 2)}
-                  for ts, v in ema10.items()]
-
-    return {"candles": candles, "ema5": ema5_data, "ema10": ema10_data}
-
-# ── POST /api/scan ────────────────────────────────────────────────────────────
-
-@app.post("/api/scan")
-async def api_scan():
-    """Run full universe scan + Claude. Takes 30–60 seconds."""
     loop   = asyncio.get_event_loop()
-    result = await loop.run_in_executor(_executor, engine.run_scan)
-    _cache.clear()   # fresh prices after scan
+    result = await loop.run_in_executor(_executor, _run)
     return result
 
-# ── POST /api/apply ───────────────────────────────────────────────────────────
 
-class ApplyRequest(BaseModel):
-    exit_tickers:    list[str]
-    approved_picks:  list[dict]
-    exit_reasons:    dict[str, str] = {}
-
-@app.post("/api/apply")
-def api_apply(req: ApplyRequest):
-    """Commit rebalance: remove exits, add approved picks."""
-    updated = engine.apply_rebalance(req.exit_tickers, req.approved_picks, req.exit_reasons)
-    _cache.clear()
-    return updated
-
-@app.get("/api/tradelog")
-def api_tradelog():
-    return engine.load_trade_log()
-
-# ── GET /api/stream (SSE live prices) ────────────────────────────────────────
-
-def _fetch_price_updates() -> dict:
-    positions = engine.load_positions()
-    updates   = {}
-    for pos in positions:
-        df = get_df(pos["ticker"], days=5)
-        if df is None or len(df) < 2:
-            continue
-        cmp   = float(df["Close"].squeeze().iloc[-1])
-        opn   = float(df["Open"].squeeze().iloc[-1])
-        entry = pos["entry_price"]
-        qty   = pos["qty"]
-        updates[pos["ticker"]] = {
-            "cmp":         round(cmp, 2),
-            "pnl_pct":     round((cmp - entry) / entry * 100, 2),
-            "day_pnl_pct": round((cmp - opn) / opn * 100, 2),
-            "total_pnl":   round((cmp - entry) * qty, 2),
-        }
-    return updates
+@app.get("/api/ml/backtest/result")
+def ml_backtest_result():
+    if not _ml_bt_cache:
+        raise HTTPException(404, "No backtest result yet — run one first")
+    return _ml_bt_cache
 
 
-async def _sse_generator():
-    loop = asyncio.get_event_loop()
-    while True:
+@app.get("/api/ml/backtest/status")
+def ml_backtest_status():
+    return {"running": _ml_bt_running, "has_result": bool(_ml_bt_cache),
+            "progress": _ml_bt_progress}
+
+
+@app.get("/api/ml/backtest/history")
+def ml_backtest_history():
+    return db.list_backtest_runs()
+
+
+# ── ML rankings ───────────────────────────────────────────────────────────────
+
+@app.get("/api/ml/rank")
+async def ml_rank(years: int = 3):
+    global _ml_rank_cache, _ml_rank_ts
+    if _ml_rank_cache and (time.time() - _ml_rank_ts) < _ML_RANK_TTL:
+        return _ml_rank_cache
+    import strategy as strat
+    loop   = asyncio.get_event_loop()
+    result = await loop.run_in_executor(_executor, lambda: strat.get_current_rankings(years))
+    _ml_rank_cache = result
+    _ml_rank_ts    = time.time()
+    db.save_rank_snapshot(result)
+    return result
+
+
+# ── Momentum backtest ─────────────────────────────────────────────────────────
+
+class MomentumParams(BaseModel):
+    m:     int = 8
+    x:     int = 3
+    years: int = 10
+
+
+@app.post("/api/momentum/backtest/run")
+async def momentum_backtest_run(params: MomentumParams):
+    global _mom_bt_running
+    if _mom_bt_running:
+        raise HTTPException(409, "Momentum backtest already running")
+    import backtest as bt
+
+    def _run():
+        global _mom_bt_running, _mom_bt_cache, _mom_bt_progress
+        _mom_bt_running = True
+        _mom_bt_progress = {"step": 0, "total": 5, "msg": "Starting…"}
+        def _on_progress(step, total, msg):
+            _mom_bt_progress.update({"step": step, "total": total, "msg": msg})
         try:
-            data = await loop.run_in_executor(_executor, _fetch_price_updates)
-            yield f"data: {json.dumps(data)}\n\n"
-        except Exception:
-            yield "data: {}\n\n"
-        await asyncio.sleep(SSE_INTERVAL)
+            result = bt.run_backtest(m=params.m, x=params.x, years=params.years,
+                                     progress_cb=_on_progress)
+            _mom_bt_cache = result
+            db.save_backtest(params.years, params.m, params.x, result, strategy="momentum")
+            return result
+        finally:
+            _mom_bt_running = False
+
+    loop   = asyncio.get_event_loop()
+    result = await loop.run_in_executor(_executor, _run)
+    return result
 
 
-@app.get("/api/stream")
-async def api_stream():
-    return StreamingResponse(
-        _sse_generator(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+@app.get("/api/momentum/backtest/result")
+def momentum_backtest_result():
+    if not _mom_bt_cache:
+        raise HTTPException(404, "No momentum backtest result — run one first")
+    return _mom_bt_cache
 
-# ── Kite Connect ─────────────────────────────────────────────────────────────
 
-def _kite_guard():
-    if not _KITE:
-        raise HTTPException(503, "kiteconnect not installed. Run: pip install kiteconnect")
-    if not KITE_API_KEY:
-        raise HTTPException(503, "KITE_API_KEY not set in config.py")
+@app.get("/api/momentum/backtest/status")
+def momentum_backtest_status():
+    return {"running": _mom_bt_running, "has_result": bool(_mom_bt_cache),
+            "progress": _mom_bt_progress}
+
+
+# ── Kite auth ────────────────────────────────────────────────────────────────
 
 @app.get("/api/kite/status")
-def api_kite_status():
-    if not _KITE or not KITE_API_KEY:
-        return {"connected": False, "reason": "Kite not configured"}
+def kite_status():
     return kite_auth.kite_status()
 
 @app.get("/api/kite/login")
-def api_kite_login():
-    _kite_guard()
+def kite_login():
+    if not KITE_API_KEY:
+        raise HTTPException(503, "KITE_API_KEY not set in .env")
     return RedirectResponse(kite_auth.get_login_url())
 
 @app.get("/api/kite/callback")
-def api_kite_callback(request_token: str = "", status: str = ""):
-    _kite_guard()
+def kite_callback(request_token: str = "", status: str = ""):
     if status != "success" or not request_token:
         return RedirectResponse("/?kite=failed")
     try:
         kite_auth.complete_login(request_token)
         return RedirectResponse("/?kite=connected")
-    except Exception as exc:
-        return RedirectResponse(f"/?kite=error")
-
-@app.get("/api/kite/market")
-def api_kite_market():
-    if not _KITE:
-        return {"open": False, "message": "Kite not configured"}
-    return kite_orders.market_status()
-
-@app.get("/api/kite/margins")
-def api_kite_margins():
-    _kite_guard()
-    try:
-        return kite_orders.get_margins()
-    except RuntimeError as exc:
-        raise HTTPException(401, str(exc))
-    except Exception as exc:
-        raise HTTPException(500, str(exc))
-
-@app.get("/api/kite/quote/{ticker}")
-def api_kite_quote(ticker: str):
-    _kite_guard()
-    try:
-        return kite_orders.get_quote(ticker)
-    except RuntimeError as exc:
-        raise HTTPException(401, str(exc))
-    except Exception as exc:
-        raise HTTPException(500, str(exc))
-
-class BuyRequest(BaseModel):
-    ticker:      str
-    qty:         int
-    order_type:  str   = "MARKET"
-    limit_price: float = 0
-    stop_loss:   float = 0
-    place_sl:    bool  = True
-    dry_run:     bool  = False
-
-@app.post("/api/kite/order/buy")
-def api_kite_buy(req: BuyRequest):
-    _kite_guard()
-    try:
-        return kite_orders.place_buy(
-            req.ticker, req.qty, req.order_type,
-            req.limit_price, req.stop_loss, req.place_sl, req.dry_run,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    except RuntimeError as exc:
-        raise HTTPException(401, str(exc))
-    except Exception as exc:
-        raise HTTPException(500, str(exc))
-
-class SellRequest(BaseModel):
-    ticker:      str
-    qty:         int
-    order_type:  str   = "MARKET"
-    limit_price: float = 0
-    dry_run:     bool  = False
-
-@app.post("/api/kite/order/sell")
-def api_kite_sell(req: SellRequest):
-    _kite_guard()
-    try:
-        return kite_orders.place_sell(
-            req.ticker, req.qty, req.order_type,
-            req.limit_price, req.dry_run,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    except RuntimeError as exc:
-        raise HTTPException(401, str(exc))
-    except Exception as exc:
-        raise HTTPException(500, str(exc))
-
-@app.get("/api/kite/holdings")
-def api_kite_holdings():
-    if not _KITE:
-        return []
-    try:
-        return kite_orders.get_holdings()
     except Exception:
-        return []
-
-@app.get("/api/kite/orders")
-def api_kite_orders():
-    if not _KITE:
-        return []
-    try:
-        return kite_orders.get_today_orders()
-    except Exception:
-        return []
-
-@app.get("/api/kite/order/{order_id}")
-def api_kite_order_status(order_id: str):
-    _kite_guard()
-    try:
-        return kite_orders.get_order_status(order_id)
-    except RuntimeError as exc:
-        raise HTTPException(401, str(exc))
-    except Exception as exc:
-        raise HTTPException(500, str(exc))
-
-# ── Options endpoints ─────────────────────────────────────────────────────────
-
-@app.get("/api/options/expiries/{symbol}")
-def api_opt_expiries(symbol: str):
-    _kite_guard()
-    try:
-        import options as opt
-        return opt.get_expiries(symbol.upper())
-    except Exception as exc:
-        raise HTTPException(500, str(exc))
-
-@app.get("/api/options/chain/{symbol}/{expiry}")
-def api_opt_chain(symbol: str, expiry: str):
-    _kite_guard()
-    try:
-        import options as opt
-        return opt.get_chain(symbol.upper(), expiry)
-    except Exception as exc:
-        raise HTTPException(500, str(exc))
+        return RedirectResponse("/?kite=error")
 
 
-# ── GET /api/health ───────────────────────────────────────────────────────────
+# ── Portfolio live ────────────────────────────────────────────────────────────
 
-@app.get("/api/health")
-def api_health():
-    import importlib, config
-    importlib.reload(config)
-    return {
-        "anthropic": bool(config.ANTHROPIC_API_KEY),
-        "kite_key":  bool(config.KITE_API_KEY),
-        "kite_secret": bool(config.KITE_API_SECRET),
-        "ready":     bool(config.ANTHROPIC_API_KEY),
-    }
-
-# ── POST /api/setup ───────────────────────────────────────────────────────────
-
-class SetupRequest(BaseModel):
-    anthropic_key: str
-    kite_key:      str = ""
-    kite_secret:   str = ""
-    capital:       int = 0
-
-@app.post("/api/setup")
-def api_setup(req: SetupRequest):
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
-    lines = []
-    if req.anthropic_key.strip():
-        lines.append(f"ANTHROPIC_API_KEY={req.anthropic_key.strip()}")
-    if req.kite_key.strip():
-        lines.append(f"KITE_API_KEY={req.kite_key.strip()}")
-    if req.kite_secret.strip():
-        lines.append(f"KITE_API_SECRET={req.kite_secret.strip()}")
-    if req.capital > 0:
-        lines.append(f"CAPITAL={req.capital}")
-    with open(env_path, "w") as f:
-        f.write("\n".join(lines) + "\n")
-    # apply to running process immediately
-    for line in lines:
-        k, v = line.split("=", 1)
-        os.environ[k] = v
-    import importlib, config, engine as eng
-    importlib.reload(config)
-    importlib.reload(eng)
-    return {"status": "saved"}
-
-# ── Backtest ──────────────────────────────────────────────────────────────────
-
-_BT_CACHE_FILE    = os.path.join(os.path.dirname(__file__), ".bt_cache_india.json")
-_BT_US_CACHE_FILE = os.path.join(os.path.dirname(__file__), ".bt_cache_us.json")
-
-def _load_cache(path: str) -> dict:
-    try:
-        with open(path, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def _save_cache(path: str, data: dict):
-    try:
-        with open(path, "w") as f:
-            json.dump(data, f)
-    except Exception:
-        pass
-
-_backtest_cache: dict = _load_cache(_BT_CACHE_FILE)
-_backtest_running = False
+def _next_rebalance() -> dict:
+    today = date.today()
+    def _last_biz(y, m):
+        last = date(y, m, calendar.monthrange(y, m)[1])
+        while last.weekday() >= 5:
+            last -= timedelta(days=1)
+        return last
+    r = _last_biz(today.year, today.month)
+    if today >= r:
+        nm = today.month % 12 + 1
+        ny = today.year + (1 if today.month == 12 else 0)
+        r = _last_biz(ny, nm)
+    return {"date": r.isoformat(), "days_left": (r - today).days, "label": r.strftime("%b %d")}
 
 
-class BacktestParams(BaseModel):
-    m: int     = 8
-    x: int     = 3
-    years: int = 10
+@app.get("/api/portfolio/daily-change")
+async def portfolio_daily_change():
+    """Daily % change for ML + Momentum strategy portfolios vs Nifty 500."""
+    import yfinance as yf
+    import numpy as np
 
+    # Current display portfolio: today's rankings (for Today % column and table display)
+    ml_tickers_now, mom_tickers_now = [], []
+    if _ml_rank_cache:
+        ml_tickers_now = [r["ticker"] for r in _ml_rank_cache.get("rankings", []) if r.get("in_top20")]
+    if _mom_bt_cache:
+        rh = _mom_bt_cache.get("rebalance_history", [])
+        if rh:
+            mom_tickers_now = rh[-1].get("holdings", [])
 
-@app.post("/api/backtest/run")
-async def run_backtest_endpoint(params: BacktestParams):
-    """
-    Launch a backtest in the thread pool.
-    Results cached until next run.
-    """
-    global _backtest_running
-    if _backtest_running:
-        raise HTTPException(status_code=409, detail="Backtest already running")
+    # MTD portfolio: last rebalance holdings (what was actually entered this month)
+    # Falls back to current rankings if backtest hasn't been run.
+    ml_tickers_mtd = ml_tickers_now
+    if _ml_bt_cache:
+        rh_ml = _ml_bt_cache.get("rebalance_history", [])
+        if rh_ml:
+            ml_tickers_mtd = rh_ml[-1].get("holdings", [])
+    mom_tickers_mtd = mom_tickers_now  # momentum already uses rebalance history
 
-    import backtest as bt
+    # Union for a single download pass
+    ml_tickers  = ml_tickers_now
+    mom_tickers = mom_tickers_now
+    all_tickers = list(set(ml_tickers_now + mom_tickers_now +
+                           ml_tickers_mtd + mom_tickers_mtd + ["^CRSLDX"]))
+    from datetime import date as _date
+    month_start = _date.today().replace(day=1).strftime("%Y-%m-%d")
 
-    def _run():
-        global _backtest_running, _backtest_cache
-        _backtest_running = True
-        try:
-            result = bt.run_backtest(m=params.m, x=params.x, years=params.years)
-            _backtest_cache = result
-            _save_cache(_BT_CACHE_FILE, result)
-            return result
-        finally:
-            _backtest_running = False
+    def _fetch():
+        # Last-session change (5d window, last bar vs prev bar)
+        raw5 = yf.download(all_tickers, period="5d", interval="1d",
+                           auto_adjust=True, progress=False, threads=True)
+        c5 = raw5["Close"] if isinstance(raw5.columns, pd.MultiIndex) else raw5
+        c5 = c5.ffill().dropna(how="all")
+        day_chg = {}
+        if len(c5) >= 2:
+            pct = c5.pct_change().iloc[-1] * 100
+            day_chg = {col: round(float(pct[col]), 2)
+                       for col in pct.index if not pd.isna(pct[col])}
+
+        # MTD change: from first trading day of current month to latest close
+        raw_m = yf.download(all_tickers, start=month_start, interval="1d",
+                            auto_adjust=True, progress=False, threads=True)
+        cm = raw_m["Close"] if isinstance(raw_m.columns, pd.MultiIndex) else raw_m
+        cm = cm.dropna(how="all")
+        mtd_chg = {}
+        if len(cm) >= 1:
+            # Use first non-NaN per column so tickers starting mid-month don't get NaN
+            first_vals = cm.apply(lambda col: col.dropna().iloc[0] if col.notna().any() else float("nan"))
+            last_vals  = cm.apply(lambda col: col.dropna().iloc[-1] if col.notna().any() else float("nan"))
+            pct_m = (last_vals / first_vals - 1) * 100
+            mtd_chg = {col: round(float(pct_m[col]), 2)
+                       for col in pct_m.index if not pd.isna(pct_m[col])}
+
+        return day_chg, mtd_chg, c5, cm
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(_executor, _run)
-    return result
+    changes, mtd, c5, cm = await loop.run_in_executor(_executor, _fetch)
 
+    def _port_avg(tickers, src):
+        vals = [src[t] for t in tickers if t in src]
+        return round(float(np.mean(vals)), 2) if vals else None
 
-@app.get("/api/backtest/result")
-def get_backtest_result():
-    if not _backtest_cache:
-        raise HTTPException(status_code=404, detail="No backtest result yet — run one first")
-    return _backtest_cache
+    # Date labels
+    def _closes(df):
+        if isinstance(df.columns, pd.MultiIndex):
+            return df["Close"].squeeze() if "Close" in df.columns.get_level_values(0) else pd.Series(dtype=float)
+        return df.squeeze() if not df.empty else pd.Series(dtype=float)
 
+    b5 = c5["^CRSLDX"].dropna() if "^CRSLDX" in c5.columns else pd.Series(dtype=float)
+    as_of = str(b5.index[-1])[:10] if len(b5) >= 1 else ""
+    prev  = str(b5.index[-2])[:10] if len(b5) >= 2 else ""
+    bm    = cm["^CRSLDX"].dropna() if "^CRSLDX" in cm.columns else pd.Series(dtype=float)
+    month_start_actual = str(bm.index[0])[:10] if len(bm) >= 1 else month_start
 
-@app.get("/api/backtest/status")
-def get_backtest_status():
     return {
-        "running": _backtest_running,
-        "has_result": bool(_backtest_cache),
+        # Last-session — cover all displayed tickers (backtest holdings ∪ current rankings)
+        "nifty500":        changes.get("^CRSLDX"),
+        "ml_portfolio":    _port_avg(ml_tickers_now, changes),
+        "mom_portfolio":   _port_avg(mom_tickers_now, changes),
+        "ml_stocks":       {t.replace(".NS",""): changes.get(t)
+                            for t in set(ml_tickers_now) | set(ml_tickers_mtd) if changes.get(t) is not None},
+        "mom_stocks":      {t.replace(".NS",""): changes.get(t)
+                            for t in set(mom_tickers_now) | set(mom_tickers_mtd) if changes.get(t) is not None},
+        "as_of":           as_of,
+        "prev_close_date": prev,
+        # MTD (last-rebalance holdings = what was entered at start of month)
+        "mtd_nifty500":      mtd.get("^CRSLDX"),
+        "mtd_ml_portfolio":  _port_avg(ml_tickers_mtd, mtd),
+        "mtd_mom_portfolio": _port_avg(mom_tickers_mtd, mtd),
+        # Per-stock MTD covers both rebalance holdings AND current top-20 so every
+        # row in the table gets a value regardless of which portfolio it came from.
+        "mtd_ml_stocks":     {t.replace(".NS",""): mtd.get(t)
+                              for t in set(ml_tickers_mtd) | set(ml_tickers_now) if mtd.get(t) is not None},
+        "mtd_mom_stocks":    {t.replace(".NS",""): mtd.get(t)
+                              for t in set(mom_tickers_mtd) | set(mom_tickers_now) if mtd.get(t) is not None},
+        "month_start_date":  month_start_actual,
     }
 
 
-@app.get("/api/backtest/current-pf")
-async def get_current_pf(m: int = 8, x: int = 3, years: int = 10):
-    """Current month's portfolio with MTD and last-day performance."""
-    import backtest as bt
-    loop   = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        _executor, lambda: bt.get_current_pf(m=m, x=x, years=years)
-    )
+@app.get("/api/portfolio/strategies")
+def portfolio_strategies():
+    """Current ML + Momentum strategy picks — no Kite required."""
+    result = {"ml": None, "momentum": None, "next_rebalance": _next_rebalance()}
+
+    if _ml_rank_cache:
+        # Build rank/score/price lookup from today's rankings
+        rank_map = {r["ticker"].replace(".NS",""): r
+                    for r in _ml_rank_cache.get("rankings", [])}
+
+        # Use last-rebalance holdings when backtest has been run so the table
+        # matches the MTD aggregate (both reflect what was entered at month-start).
+        # Fall back to today's top-20 if no backtest cache exists.
+        if _ml_bt_cache:
+            rh_ml = _ml_bt_cache.get("rebalance_history", [])
+            held_tickers = [t.replace(".NS","") for t in rh_ml[-1].get("holdings",[])] if rh_ml else []
+        else:
+            held_tickers = [r["ticker"].replace(".NS","")
+                            for r in _ml_rank_cache.get("rankings",[]) if r.get("in_top20")]
+
+        holdings = []
+        for i, sym in enumerate(held_tickers, 1):
+            r = rank_map.get(sym, {})
+            holdings.append({
+                "symbol": sym,
+                "ticker": sym + ".NS",
+                "rank":   r.get("rank",  i),
+                "score":  r.get("composite_score"),
+                "price":  r.get("price"),
+            })
+
+        result["ml"] = {
+            "as_of":    _ml_bt_cache["rebalance_history"][-1].get("date") if _ml_bt_cache and _ml_bt_cache.get("rebalance_history") else _ml_rank_cache.get("as_of"),
+            "holdings": holdings,
+        }
+
+    if _mom_bt_cache:
+        rh = _mom_bt_cache.get("rebalance_history", [])
+        if rh:
+            last = rh[-1]
+            result["momentum"] = {
+                "as_of":    last.get("date"),
+                "holdings": [t.replace(".NS", "") for t in last.get("holdings", [])],
+                "added":    [t.replace(".NS", "") for t in last.get("added", [])],
+                "removed":  [t.replace(".NS", "") for t in last.get("removed", [])],
+            }
+
     return result
 
 
-@app.get("/api/backtest/rebalance-plan")
-async def rebalance_plan(
-    m: int = 8, x: int = 3, years: int = 10, capital: float = 0,
-    exclude: str = "",   # comma-separated symbols, e.g. "ANTHEM,NIFTYBEES"
-):
-    """Compare pflio target vs Kite demat. Returns SELL/BUY/HOLD actions."""
-    if not _KITE:
-        raise HTTPException(status_code=503, detail="Kite not available")
-    import backtest as bt
-    exclude_list = [s.strip() for s in exclude.split(",") if s.strip()]
-    loop   = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        _executor,
-        lambda: bt.get_rebalance_plan(m=m, x=x, years=years, capital=capital,
-                                      exclude_tickers=exclude_list)
-    )
-    return result
+@app.get("/api/portfolio/live")
+def portfolio_live():
+    status = kite_auth.kite_status()
+    if not status.get("connected"):
+        return {"connected": False, "reason": status.get("reason", "Kite not connected")}
+    try:
+        import kite_orders
+        holdings_map = kite_orders.get_holdings()
+        if not holdings_map:
+            return {"connected": True, "holdings": [], "summary": {
+                "total_invested": 0, "total_value": 0, "total_pnl": 0,
+                "total_pnl_pct": 0, "day_change": 0, "count": 0,
+            }, "next_rebalance": _next_rebalance(), "exit_candidates": []}
+
+        # Build rank map from cached ML rankings
+        rank_map, portfolio_set = {}, set()
+        if _ml_rank_cache:
+            for r in _ml_rank_cache.get("rankings", []):
+                rank_map[r["ticker"].replace(".NS", "")] = r.get("rank", 999)
+            portfolio_set = {t.replace(".NS", "") for t in _ml_rank_cache.get("portfolio", [])}
+
+        holdings, total_invested, total_value, total_day_pnl = [], 0, 0, 0
+        for sym, h in holdings_map.items():
+            qty       = h.get("quantity", 0)
+            avg_price = h.get("average_price", 0)
+            ltp       = h.get("last_price", 0)
+            day_chg   = h.get("day_change", 0)
+            day_chg_p = h.get("day_change_percentage", 0)
+            invested  = round(qty * avg_price, 2)
+            value     = round(qty * ltp, 2)
+            pnl_pct   = round((ltp - avg_price) / avg_price * 100, 2) if avg_price else 0
+            total_invested  += invested
+            total_value     += value
+            total_day_pnl   += day_chg * qty
+            holdings.append({
+                "symbol": sym, "qty": qty,
+                "avg_price": round(avg_price, 2), "ltp": round(ltp, 2),
+                "invested": invested, "value": value,
+                "pnl": round(value - invested, 2), "pnl_pct": pnl_pct,
+                "day_change": round(day_chg, 2), "day_change_pct": round(day_chg_p, 2),
+                "ml_rank": rank_map.get(sym),
+                "in_portfolio": sym in portfolio_set if portfolio_set else None,
+            })
+
+        holdings.sort(key=lambda x: x["value"], reverse=True)
+        total_pnl     = round(total_value - total_invested, 2)
+        total_pnl_pct = round(total_pnl / total_invested * 100, 2) if total_invested else 0
+        exit_candidates = [h["symbol"] for h in holdings
+                           if portfolio_set and not h["in_portfolio"]]
+        return {
+            "connected": True,
+            "holdings": holdings,
+            "summary": {
+                "total_invested": round(total_invested, 2),
+                "total_value":    round(total_value, 2),
+                "total_pnl":      total_pnl,
+                "total_pnl_pct":  total_pnl_pct,
+                "day_change":     round(total_day_pnl, 2),
+                "count":          len(holdings),
+            },
+            "next_rebalance":  _next_rebalance(),
+            "exit_candidates": exit_candidates,
+        }
+    except Exception as e:
+        return {"connected": True, "error": str(e), "holdings": []}
 
 
-class RebalanceExecuteBody(BaseModel):
-    sells:   list[dict]
-    buys:    list[dict]
-    dry_run: bool = True
+# ── HA backtest ───────────────────────────────────────────────────────────────
+
+_ha_bt_cache:   dict = {}
+_ha_bt_running: bool = False
 
 
-@app.post("/api/backtest/rebalance-execute")
-async def rebalance_execute(body: RebalanceExecuteBody):
-    """Place CNC sell then buy orders for the rebalance."""
-    if not _KITE:
-        raise HTTPException(status_code=503, detail="Kite not available")
-    import backtest as bt
-    loop   = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        _executor,
-        lambda: bt.execute_rebalance(body.sells, body.buys, dry_run=body.dry_run)
-    )
-    return result
+class HABacktestParams(BaseModel):
+    from_date: str  = ""          # ISO date, defaults to 1 year ago
+    to_date:   str  = ""          # ISO date, defaults to today
+    mode:      str  = "futures"   # futures | options_sell | options_buy
+    sl_pts:    float = 0
+    sl_pct:    float = 0.5
+    lots:      int   = 1
 
 
+@app.post("/api/ha/backtest/run")
+async def ha_backtest_run(params: HABacktestParams):
+    global _ha_bt_running
+    if _ha_bt_running:
+        raise HTTPException(409, "HA backtest already running")
+    import ha_backtest as ha
 
-
-# ── US Backtest (NASDAQ 100) ──────────────────────────────────────────────────
-
-_us_backtest_cache: dict = _load_cache(_BT_US_CACHE_FILE)
-_us_backtest_running = False
-
-
-@app.post("/api/backtest-us/run")
-async def run_us_backtest(params: BacktestParams):
-    global _us_backtest_running
-    if _us_backtest_running:
-        raise HTTPException(status_code=409, detail="US backtest already running")
-    import backtest_us as bt_us
+    from_date = date.fromisoformat(params.from_date) if params.from_date \
+                else date.today().replace(year=date.today().year - 1)
+    to_date   = date.fromisoformat(params.to_date) if params.to_date \
+                else date.today()
 
     def _run():
-        global _us_backtest_running, _us_backtest_cache
-        _us_backtest_running = True
+        global _ha_bt_running, _ha_bt_cache
+        _ha_bt_running = True
         try:
-            result = bt_us.run_backtest(m=params.m, x=params.x, years=params.years)
-            _us_backtest_cache = result
-            _save_cache(_BT_US_CACHE_FILE, result)
+            result = ha.run_backtest(
+                from_date=from_date, to_date=to_date,
+                mode=params.mode, sl_pts=params.sl_pts,
+                sl_pct=params.sl_pct, lots=params.lots,
+            )
+            _ha_bt_cache = result
             return result
         finally:
-            _us_backtest_running = False
+            _ha_bt_running = False
 
     loop   = asyncio.get_event_loop()
     result = await loop.run_in_executor(_executor, _run)
     return result
 
 
-@app.get("/api/backtest-us/result")
-def get_us_backtest_result():
-    if not _us_backtest_cache:
-        raise HTTPException(status_code=404, detail="No US backtest result — run one first")
-    return _us_backtest_cache
+@app.get("/api/ha/backtest/result")
+def ha_backtest_result():
+    if not _ha_bt_cache:
+        raise HTTPException(404, "No HA backtest result — run one first")
+    return _ha_bt_cache
 
 
-@app.get("/api/backtest-us/status")
-def get_us_backtest_status():
-    return {"running": _us_backtest_running, "has_result": bool(_us_backtest_cache)}
+@app.get("/api/ha/backtest/status")
+def ha_backtest_status():
+    return {"running": _ha_bt_running, "has_result": bool(_ha_bt_cache)}
 
 
-@app.get("/api/backtest-us/current-pf")
-async def get_us_current_pf(m: int = 10, x: int = 3, years: int = 10):
-    import backtest_us as bt_us
-    loop   = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        _executor, lambda: bt_us.get_current_pf(m=m, x=x, years=years)
-    )
-    return result
+# ── Pulse live signal + trade ─────────────────────────────────────────────────
+
+@app.get("/api/pulse/signal")
+async def pulse_signal():
+    import pulse_live as pl
+
+    # Check Kite connection first
+    status = kite_auth.kite_status()
+    if not status.get("connected"):
+        raise HTTPException(401, status.get("reason", "Kite not connected — please login"))
+
+    kite = kite_auth.get_kite()
+    loop = asyncio.get_event_loop()
+
+    sig    = await loop.run_in_executor(_executor, lambda: pl.current_signal(kite))
+    expiry = await loop.run_in_executor(_executor, lambda: pl.monthly_expiry(kite))
+    opt    = await loop.run_in_executor(_executor,
+                lambda: pl.option_details(kite, sig["active_signal"], sig["nifty_price"], expiry)) \
+             if expiry and sig.get("active_signal", "FLAT") != "FLAT" else None
+    pos    = await loop.run_in_executor(_executor, lambda: pl.nifty_positions(kite))
+
+    return {**sig, "option": opt, "expiry": str(expiry) if expiry else None, "positions": pos}
 
 
-# ── Options Scorecard ─────────────────────────────────────────────────────────
+class PulseTradeParams(BaseModel):
+    tradingsymbol: str
+    lots:          int = 1
 
-@app.get("/api/options/scorecard")
-def api_options_scorecard(symbol: str = "NIFTY", expiry1: str = "", expiry2: str = ""):
-    _kite_guard()
+
+@app.post("/api/pulse/sell")
+async def pulse_sell(params: PulseTradeParams):
+    import pulse_live as pl
+    from kiteconnect.exceptions import KiteException
+    status = kite_auth.kite_status()
+    if not status.get("connected"):
+        raise HTTPException(401, status.get("reason", "Kite not connected"))
+    kite = kite_auth.get_kite()
+    loop = asyncio.get_event_loop()
     try:
-        from options_scorecard import run_scorecard
-        result = run_scorecard(
-            symbol=symbol,
-            expiry1=expiry1 or None,
-            expiry2=expiry2 or None,
+        oid = await loop.run_in_executor(_executor,
+                  lambda: pl.sell_option(kite, params.tradingsymbol, params.lots))
+    except KiteException as e:
+        raise HTTPException(403, str(e))
+    return {"order_id": oid, "tradingsymbol": params.tradingsymbol, "lots": params.lots}
+
+
+class PulseCloseParams(BaseModel):
+    tradingsymbol: str
+    quantity:      int
+
+
+@app.post("/api/pulse/close")
+async def pulse_close(params: PulseCloseParams):
+    import pulse_live as pl
+    from kiteconnect.exceptions import KiteException
+    status = kite_auth.kite_status()
+    if not status.get("connected"):
+        raise HTTPException(401, status.get("reason", "Kite not connected"))
+    kite = kite_auth.get_kite()
+    loop = asyncio.get_event_loop()
+    try:
+        oid = await loop.run_in_executor(_executor,
+                  lambda: pl.close_option(kite, params.tradingsymbol, params.quantity))
+    except KiteException as e:
+        raise HTTPException(403, str(e))
+    return {"order_id": oid, "tradingsymbol": params.tradingsymbol}
+
+
+# ── Order execution ───────────────────────────────────────────────────────────
+
+class OrderParams(BaseModel):
+    to_buy:             list  = []
+    to_sell:            list  = []
+    capital_per_stock:  float = 0
+
+
+@app.post("/api/orders/preview")
+async def orders_preview(params: OrderParams):
+    import kite_orders as ko
+    from kiteconnect.exceptions import KiteException
+    status = kite_auth.kite_status()
+    if not status.get("connected"):
+        raise HTTPException(401, status.get("reason", "Kite not connected"))
+    loop = asyncio.get_event_loop()
+    try:
+        return await loop.run_in_executor(
+            _executor,
+            lambda: ko.preview(params.to_buy, params.to_sell, params.capital_per_stock),
         )
-        return result
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except KiteException as e:
+        raise HTTPException(403, str(e))
 
 
-# ── Weekly Report Card ────────────────────────────────────────────────────────
-
-@app.get("/api/report/data")
-async def api_report_data(market: str = "india"):
-    """Compile all data for the weekly social media report card."""
-    import report as rpt
-    if market == "us":
-        import backtest_us as bt
-        bt_result = _us_backtest_cache
-        loop   = asyncio.get_event_loop()
-        pf     = await loop.run_in_executor(_executor, lambda: bt.get_current_pf())
-    else:
-        import backtest as bt
-        bt_result = _backtest_cache
-        loop   = asyncio.get_event_loop()
-        pf     = await loop.run_in_executor(_executor, lambda: bt.get_current_pf())
-
-    data = await loop.run_in_executor(
-        _executor, lambda: rpt.generate_report_data(market, bt_result, pf)
-    )
-    return data
+@app.post("/api/orders/execute")
+async def orders_execute(params: OrderParams):
+    import kite_orders as ko
+    from kiteconnect.exceptions import KiteException
+    status = kite_auth.kite_status()
+    if not status.get("connected"):
+        raise HTTPException(401, status.get("reason", "Kite not connected"))
+    loop = asyncio.get_event_loop()
+    try:
+        return await loop.run_in_executor(
+            _executor,
+            lambda: ko.execute(params.to_buy, params.to_sell, params.capital_per_stock),
+        )
+    except KiteException as e:
+        raise HTTPException(403, str(e))
 
 
-@app.get("/report", response_class=HTMLResponse)
-def report_page(market: str = "india"):
-    path = os.path.join(os.path.dirname(__file__), "report.html")
-    return open(path).read() if os.path.exists(path) else "<h1>report.html not found</h1>"
-
-
-# ── GET / — serve dashboard ───────────────────────────────────────────────────
+# ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 def root():

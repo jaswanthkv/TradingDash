@@ -4,11 +4,11 @@ backtest.py — Monthly rebalancing backtest for Nifty Microcap 250 universe.
 Strategy (pflio):
   - Each month, hold top `m` stocks ranked by prior-month return.
   - Remove `x` worst performers every month and replace with next best.
-  - Benchmark: Nifty 50 (^NSEI) buy-and-hold.
+  - Benchmark: Nifty 500 (^CRSLDX) buy-and-hold.
 
 KPIs: CAGR, Sharpe ratio (rf=6% annualised for India), Max Drawdown.
 """
-import csv, logging, os
+import csv, logging, os, time
 from datetime import datetime, date, timedelta
 
 import numpy as np
@@ -19,7 +19,7 @@ from config import UNIVERSE_CSV
 
 logger = logging.getLogger(__name__)
 
-_BENCHMARK  = "^NSEI"
+_BENCHMARK  = "^CRSLDX"
 _RISK_FREE  = 0.06          # 6% annualised (India short-term)
 _DEFAULT_M  = 8             # portfolio size (matches current swing book)
 _DEFAULT_X  = 3             # stocks removed / replaced each month
@@ -28,18 +28,37 @@ _YEARS      = 10            # lookback years
 
 # ── universe ──────────────────────────────────────────────────────────────────
 
-def load_universe(csv_path: str = UNIVERSE_CSV) -> list[str]:
-    """Return list of yfinance tickers (SYMBOL.NS) from the NSE watchlist CSV."""
+def load_universe(path: str = None) -> list[str]:
+    """Return list of yfinance tickers (SYMBOL.NS) from an NSE CSV file."""
+    if path is None:
+        path = UNIVERSE_CSV
+    return _load_universe_csv(path)
+
+
+def _load_universe_csv(csv_path: str) -> list[str]:
     tickers = []
     try:
         with open(csv_path, encoding="utf-8-sig") as f:
             reader = csv.reader(f)
-            next(reader)  # header row
-            next(reader)  # index aggregate row (NIFTY MICROCAP 250)
-            for row in reader:
-                sym = row[0].strip() if row else ""
-                if sym:
-                    tickers.append(sym + ".NS")
+            header = next(reader)
+            header_clean = [h.strip().lower() for h in header]
+            if "symbol" in header_clean:
+                sym_col = header_clean.index("symbol")
+                ser_col = header_clean.index("series") if "series" in header_clean else None
+                for row in reader:
+                    if not row:
+                        continue
+                    if ser_col is not None and row[ser_col].strip() != "EQ":
+                        continue
+                    sym = row[sym_col].strip()
+                    if sym:
+                        tickers.append(sym + ".NS")
+            else:
+                next(reader)  # skip aggregate row in MW format
+                for row in reader:
+                    sym = row[0].strip() if row else ""
+                    if sym and " " not in sym:
+                        tickers.append(sym + ".NS")
     except FileNotFoundError:
         logger.error("Universe CSV not found: %s", csv_path)
     return tickers
@@ -47,39 +66,78 @@ def load_universe(csv_path: str = UNIVERSE_CSV) -> list[str]:
 
 # ── data download ─────────────────────────────────────────────────────────────
 
+_BATCH_SIZE = 100   # yfinance rate-limit safe batch size
+_BATCH_PAUSE = 5    # seconds between batches
+
+
+def _fetch_single(ticker: str, period: str):
+    """Download a single ticker; return None on failure."""
+    try:
+        raw = yf.download(ticker, period=period, interval="1mo",
+                          auto_adjust=True, progress=False, threads=False)
+        if raw.empty:
+            return None
+        closes = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+        closes.index = pd.to_datetime(closes.index).tz_localize(None)
+        return closes
+    except Exception:
+        return None
+
+
 def download_monthly(tickers: list[str], years: int = _YEARS) -> pd.DataFrame:
     """
     Download adjusted monthly close prices for tickers + benchmark.
-    Returns a DataFrame indexed by month-end dates, columns = tickers + benchmark.
-    Drops columns with >40% missing data.
-    Always excludes the current incomplete month so portfolio selection
-    is stable throughout the month (based only on prior completed months).
+    Benchmark is fetched first separately to guarantee availability.
+    Stock tickers are batched to avoid yfinance rate limiting.
     """
     period = f"{years}y"
-    all_tickers = tickers + [_BENCHMARK]
-    logger.info("Downloading %d tickers (%s period) …", len(all_tickers), period)
 
-    raw = yf.download(
-        all_tickers,
-        period=period,
-        interval="1mo",
-        auto_adjust=True,
-        progress=False,
-        threads=True,
-    )
-    closes = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
-    closes.index = pd.to_datetime(closes.index).tz_localize(None)
+    # Always download benchmark first; retry once if rate-limited
+    bench = _fetch_single(_BENCHMARK, period)
+    if bench is None:
+        time.sleep(10)
+        bench = _fetch_single(_BENCHMARK, period)
+    if bench is None:
+        raise RuntimeError("Cannot download Nifty 500 benchmark — check internet connection.")
+    bench.columns = [_BENCHMARK] if bench.ndim == 1 else bench.columns
+    if isinstance(bench, pd.Series):
+        bench = bench.to_frame(_BENCHMARK)
 
-    # Drop the current incomplete month — only use rows where the bar is a full month
+    logger.info("Downloading %d stock tickers (%s) in batches of %d …",
+                len(tickers), period, _BATCH_SIZE)
+
+    batches = [tickers[i:i + _BATCH_SIZE] for i in range(0, len(tickers), _BATCH_SIZE)]
+    frames = [bench]
+    for idx, batch in enumerate(batches):
+        if idx > 0:
+            time.sleep(_BATCH_PAUSE)
+        try:
+            raw = yf.download(
+                batch, period=period, interval="1mo",
+                auto_adjust=True, progress=False, threads=True,
+            )
+            closes = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+            closes.index = pd.to_datetime(closes.index).tz_localize(None)
+            frames.append(closes)
+            logger.info("Batch %d/%d done (%d tickers)", idx + 1, len(batches), len(batch))
+        except Exception as e:
+            logger.warning("Batch %d/%d failed: %s", idx + 1, len(batches), e)
+
+    combined = pd.concat(frames, axis=1)
+    combined = combined.loc[:, ~combined.columns.duplicated()]
+
     today = date.today()
     month_start = pd.Timestamp(today.replace(day=1))
-    closes = closes[closes.index < month_start]
+    combined = combined[combined.index < month_start]
 
-    # Drop tickers with too many NaNs
-    threshold = 0.6 * len(closes)
-    closes = closes.dropna(axis=1, thresh=int(threshold))
-    logger.info("Data shape after quality filter: %s", closes.shape)
-    return closes
+    # Filter on recent activity using a FIXED 12-month window so the universe
+    # is consistent regardless of how many years were downloaded (5y vs 10y
+    # gives the same eligible stocks at current rebalance dates).
+    recent_win = min(12, len(combined))
+    recent_ok  = combined.iloc[-recent_win:].notna().sum() >= (recent_win // 2)
+    combined   = combined.loc[:, recent_ok]
+    logger.info("Data shape after quality filter: %s", combined.shape)
+    return combined
 
 
 # ── KPIs ──────────────────────────────────────────────────────────────────────
@@ -108,25 +166,40 @@ def max_drawdown(returns: pd.Series) -> float:
     return float(dd.min())
 
 
+def _sortino(returns: pd.Series, rf: float = _RISK_FREE) -> float:
+    mrf  = (1 + rf) ** (1 / 12) - 1
+    exc  = returns - mrf
+    dstd = exc[exc < 0].std()
+    return float(exc.mean() / dstd * np.sqrt(12)) if dstd and dstd > 0 else 0.0
+
+
 def compute_kpis(returns: pd.Series, label: str) -> dict:
+    c = cagr(returns) * 100
+    d = max_drawdown(returns) * 100
     return {
-        "label":        label,
-        "cagr_pct":     round(cagr(returns) * 100, 2),
-        "sharpe":       round(sharpe(returns), 2),
-        "max_dd_pct":   round(max_drawdown(returns) * 100, 2),
-        "total_months": int(len(returns)),
+        "label":            label,
+        "cagr_pct":         round(c, 2),
+        "sharpe":           round(sharpe(returns), 2),
+        "sortino":          round(_sortino(returns), 2),
+        "max_dd_pct":       round(d, 2),
+        "calmar":           round(abs(c / d) if d else 0, 2),
+        "win_rate_pct":     round(float((returns > 0).mean() * 100), 1),
+        "total_months":     int(len(returns)),
+        "total_return_pct": round(float((1 + returns).prod() - 1) * 100, 2),
     }
 
 
 # ── pflio core (shared by backtest + current-pf) ──────────────────────────────
 
-def _run_pflio(monthly_ret: pd.DataFrame, m: int, x: int):
+def _run_pflio(monthly_ret: pd.DataFrame, m: int, x: int, track_history: bool = False):
     """
     Run the momentum rebalancing loop.
-    Returns (port_returns: dict[date, float], final_portfolio: list[str]).
+    Returns (port_returns, final_portfolio) or
+            (port_returns, final_portfolio, rebalance_log) if track_history=True.
     """
     portfolio    = []
     port_returns = {}
+    rebalance_log = []
 
     for i, dt in enumerate(monthly_ret.index):
         if i == 0:
@@ -141,13 +214,31 @@ def _run_pflio(monthly_ret: pd.DataFrame, m: int, x: int):
 
         port_returns[dt] = float(held_rets.mean())
 
-        all_avail   = monthly_ret.loc[dt].dropna().sort_values(ascending=False)
-        to_remove   = set(held_rets.sort_values(ascending=True).head(x).index)
-        kept        = [p for p in portfolio if p not in to_remove]
-        kept_set    = set(kept)
-        candidates  = [t for t in all_avail.index if t not in kept_set]
-        portfolio   = list(dict.fromkeys(kept + candidates[:x]))[:m]
+        all_avail  = monthly_ret.loc[dt].dropna().sort_values(ascending=False)
+        to_remove  = set(held_rets.sort_values(ascending=True).head(x).index)
+        kept       = [p for p in portfolio if p not in to_remove]
+        kept_set   = set(kept)
+        candidates = [t for t in all_avail.index if t not in kept_set]
+        new_portfolio = list(dict.fromkeys(kept + candidates[:x]))[:m]
 
+        if track_history:
+            added   = [t for t in new_portfolio if t not in portfolio]
+            removed = list(to_remove)
+            label   = dt.strftime("%Y-%m") if hasattr(dt, "strftime") else str(dt)[:7]
+            turnover = len(added) / max(len(new_portfolio), 1)
+            rebalance_log.append({
+                "date":           label,
+                "holdings":       new_portfolio[:],
+                "added":          added,
+                "removed":        removed,
+                "turnover_pct":   round(turnover * 100, 1),
+                "period_ret_pct": round(port_returns[dt] * 100, 2),
+            })
+
+        portfolio = new_portfolio
+
+    if track_history:
+        return port_returns, portfolio, rebalance_log
     return port_returns, portfolio
 
 
@@ -165,7 +256,7 @@ def get_current_pf(
     m: int = _DEFAULT_M,
     x: int = _DEFAULT_X,
     years: int = _YEARS,
-    csv_path: str = UNIVERSE_CSV,
+    csv_path: str = None,
 ) -> dict:
     """
     Return the current holdings after the last monthly rebalance, with:
@@ -299,7 +390,7 @@ def get_rebalance_plan(
     years: int = _YEARS,
     capital: float = 0,          # 0 = use CAPITAL from config
     exclude_tickers: list[str] = None,   # tickers to ignore (existing non-pflio positions)
-    csv_path: str = UNIVERSE_CSV,
+    csv_path: str = None,
 ) -> dict:
     """
     Compare pflio target holdings vs actual Kite demat.
@@ -478,7 +569,7 @@ def run_backtest(
     m: int  = _DEFAULT_M,
     x: int  = _DEFAULT_X,
     years: int = _YEARS,
-    csv_path: str = UNIVERSE_CSV,
+    csv_path: str = None,
     progress_cb=None,
 ) -> dict:
     """
@@ -499,7 +590,12 @@ def run_backtest(
     price_df = download_monthly(tickers, years)
 
     _progress(3, 5, "Running pflio strategy …")
-    strat_returns = pflio(price_df, m=m, x=x)
+    stock_cols = [c for c in price_df.columns if c != _BENCHMARK]
+    if not stock_cols:
+        raise RuntimeError("No stock data available after download — likely rate limited. Try again in a minute.")
+    monthly_ret = price_df[stock_cols].pct_change().dropna(how="all")
+    port_returns_dict, _, rebalance_log = _run_pflio(monthly_ret, m, x, track_history=True)
+    strat_returns = pd.Series(port_returns_dict, name="Strategy")
 
     _progress(4, 5, "Computing benchmark returns …")
     if _BENCHMARK not in price_df.columns:
@@ -514,7 +610,7 @@ def run_backtest(
 
     _progress(5, 5, "Computing KPIs …")
     strat_kpi = compute_kpis(strat_r, f"Microcap250 Momentum (m={m}, x={x})")
-    bench_kpi = compute_kpis(bench_r, "Nifty 50 Buy & Hold")
+    bench_kpi = compute_kpis(bench_r, "Nifty 500 Buy & Hold")
 
     # Equity curves (normalised to ₹1)
     strat_curve = (1 + strat_r).cumprod()
@@ -543,14 +639,20 @@ def run_backtest(
             rows.append(row)
         return rows
 
+    # Stitch benchmark return into each rebalance log entry
+    bench_map = {d.strftime("%Y-%m"): float(bench_r.get(d, 0)) for d in bench_r.index}
+    for entry in rebalance_log:
+        entry["bench_ret_pct"] = round(bench_map.get(entry["date"], 0) * 100, 2)
+
     return {
-        "params":          {"m": m, "x": x, "years": years, "universe_size": len(tickers)},
-        "strategy_kpi":    strat_kpi,
-        "benchmark_kpi":   bench_kpi,
-        "dates":           [d.strftime("%Y-%m") for d in common],
-        "strategy_curve":  [round(v, 4) for v in strat_curve.tolist()],
-        "benchmark_curve": [round(v, 4) for v in bench_curve.tolist()],
-        "monthly_returns": _monthly_grid(strat_r),
-        "monthly_bench":   _monthly_grid(bench_r),
-        "run_at":          datetime.now().isoformat(timespec="seconds"),
+        "params":             {"m": m, "x": x, "years": years, "universe_size": len(tickers)},
+        "strategy_kpi":       strat_kpi,
+        "benchmark_kpi":      bench_kpi,
+        "dates":              [d.strftime("%Y-%m") for d in common],
+        "strategy_curve":     [round(v, 4) for v in strat_curve.tolist()],
+        "benchmark_curve":    [round(v, 4) for v in bench_curve.tolist()],
+        "monthly_returns":    _monthly_grid(strat_r),
+        "monthly_bench":      _monthly_grid(bench_r),
+        "rebalance_history":  rebalance_log,
+        "run_at":             datetime.now().isoformat(timespec="seconds"),
     }
