@@ -2350,18 +2350,30 @@ function showMinDetail(i) {
     el.style.background = j === i ? 'var(--border-inner)' : '';
   });
   const detail = document.getElementById('minHistDetail');
+  const alpha = r.period_ret_pct - (r.bench_ret_pct ?? 0);
   detail.innerHTML = `
     <div style="padding:16px">
       <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:4px">${r.date}</div>
-      <div style="font-size:11px;color:var(--t3);margin-bottom:12px">${r.qualifying} qualifying · ${r.turnover_pct}% turnover · vs Nifty ${r.bench_ret_pct >= 0 ? '+' : ''}${r.bench_ret_pct}%</div>
-      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Holdings (${r.holdings.length})</div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap">
-        ${r.holdings.map(t => {
-          const sym = t.replace('.NS','');
-          const isNew = r.added.includes(t);
-          const isOut = r.removed.includes(t);
-          return `<span class="chip ${isNew ? 'chip-add' : isOut ? 'chip-rem' : 'chip-hold'}">${sym}</span>`;
-        }).join('')}
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+        ${statCard('Return', pct(r.period_ret_pct), r.period_ret_pct >= 0 ? '#16a34a' : '#dc2626')}
+        ${statCard('Alpha', pct(alpha,1), alpha >= 0 ? '#16a34a' : '#dc2626')}
+        ${statCard('Turnover', r.turnover_pct + '%', '#64748b')}
+      </div>
+      ${r.added?.length ? `
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">In (${r.added.length})</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">${r.added.map(t => `<span class="chip chip-add">${t.replace('.NS','')}</span>`).join('')}</div>
+        </div>` : ''}
+      ${r.removed?.length ? `
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">Out (${r.removed.length})</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">${r.removed.map(t => `<span class="chip chip-rem">${t.replace('.NS','')}</span>`).join('')}</div>
+        </div>` : ''}
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">Holdings (${r.holdings.length})</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${r.holdings.map(t => `<span class="chip chip-hold">${t.replace('.NS','')}</span>`).join('')}
+        </div>
       </div>
     </div>`;
 }
