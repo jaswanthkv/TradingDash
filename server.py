@@ -24,6 +24,10 @@ Endpoints:
   POST /api/ha/backtest/run           — launch HA 30-min backtest (needs Kite)
   GET  /api/ha/backtest/result        — latest HA backtest result
   GET  /api/ha/backtest/status        — running / has_result
+
+  POST /api/ipo-screen/run            — launch IPO breakout screen
+  GET  /api/ipo-screen/result         — latest IPO screen results
+  GET  /api/ipo-screen/status         — running / has_result / progress message
 """
 import asyncio
 import calendar
@@ -69,6 +73,10 @@ _min_bt_progress: dict = {"step": 0, "total": 5, "msg": ""}
 _ml_rank_cache: dict = db.get_latest_rank_snapshot()
 _ml_rank_ts:    float = 0.0   # force a fresh fetch on first request
 _ML_RANK_TTL    = 300         # seconds
+
+_ipo_cache:    dict = {}
+_ipo_running:  bool = False
+_ipo_progress: str  = ""
 
 
 # ── ML backtest ───────────────────────────────────────────────────────────────
@@ -647,6 +655,51 @@ async def orders_execute(params: OrderParams):
         )
     except KiteException as e:
         raise HTTPException(403, str(e))
+
+
+# ── IPO Breakout Screen ───────────────────────────────────────────────────────
+
+class IPOScreenParams(BaseModel):
+    years: int = 2
+
+
+@app.post("/api/ipo-screen/run")
+async def ipo_screen_run(params: IPOScreenParams):
+    global _ipo_running, _ipo_cache, _ipo_progress
+    if _ipo_running:
+        raise HTTPException(409, "IPO screen already running")
+    _ipo_running  = True
+    _ipo_progress = "Starting…"
+
+    def _run():
+        global _ipo_running, _ipo_cache, _ipo_progress
+        try:
+            from ipo_screen import run_ipo_screen
+            def _prog(msg):
+                global _ipo_progress
+                _ipo_progress = msg
+            _ipo_cache = run_ipo_screen(years=params.years, on_progress=_prog)
+        except Exception as exc:
+            _ipo_progress = f"Error: {exc}"
+        finally:
+            _ipo_running = False
+
+    _executor.submit(_run)
+    return {"started": True}
+
+
+@app.get("/api/ipo-screen/result")
+def ipo_screen_result():
+    return _ipo_cache or {}
+
+
+@app.get("/api/ipo-screen/status")
+def ipo_screen_status():
+    return {
+        "running":    _ipo_running,
+        "has_result": bool(_ipo_cache),
+        "progress":   _ipo_progress,
+    }
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
