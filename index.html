@@ -786,6 +786,48 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
             <div class="heatmap-wrap" id="minHeatmapWrap"></div>
           </div>
         </div>
+        <div class="trade-panel" id="minTradePanel">
+          <div class="trade-panel-head">
+            <span class="trade-panel-title">⚡ Execute Rebalance via Kite</span>
+            <span style="font-size:11px;color:#94a3b8">Latest rebalance only · CNC Market orders</span>
+          </div>
+          <div style="padding:14px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div class="param-group">
+              <label>Mode</label>
+              <select id="min-trade-mode" onchange="_updatePerStockLabel('min')">
+                <option value="fresh">Fresh Start</option>
+                <option value="rebalance">Rebalance</option>
+              </select>
+            </div>
+            <div class="param-sep">·</div>
+            <div class="param-group">
+              <label>Total Capital (₹)</label>
+              <input id="min-capital" type="number" value="500000" step="50000" min="100000" style="width:130px" oninput="_updatePerStockLabel('min')"/>
+            </div>
+            <div style="font-size:11px;color:#64748b" id="min-per-stock-label">₹25,000 per stock (20 stocks)</div>
+            <button class="btn btn-ghost btn-sm" onclick="previewOrders('min')">Preview Orders</button>
+            <span id="minTradeStatus" style="font-size:11px;color:#94a3b8"></span>
+          </div>
+          <div id="minOrderPreview" class="hidden">
+            <div id="minOrderRows"></div>
+            <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
+              border-top:1px solid #f1f5f9;background:#f8fafc">
+              <div style="font-size:12px;color:#64748b" id="minOrderSummary"></div>
+              <button class="btn btn-primary btn-sm" onclick="executeOrders('min')" id="minExecBtn">
+                Execute All Orders
+              </button>
+            </div>
+            <div class="trade-warning">
+              ⚠️ Market orders will be placed immediately on Kite. Only run during market hours (9:15 AM – 3:30 PM). This action is irreversible.
+            </div>
+          </div>
+          <div id="minOrderResults" class="hidden">
+            <div id="minResultRows"></div>
+            <div style="padding:10px 16px;font-size:12px;color:#64748b;border-top:1px solid #f1f5f9;
+              background:#f8fafc" id="minResultSummary"></div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-head">
             <span class="card-title">Rebalancing History</span>
@@ -2077,15 +2119,23 @@ async function closePulsePosition(tradingsymbol, qty) {
 // ── Order execution ───────────────────────────────────────────────────────────
 
 function _updatePerStockLabel(strategy) {
-  const cap  = +document.getElementById('mom-capital').value || 0;
-  const m    = +document.getElementById('mp-m').value || 8;
-  const per  = cap / m;
-  document.getElementById('mom-per-stock-label').textContent =
-    `₹${Math.round(per).toLocaleString('en-IN')} per stock (${m} stocks)`;
+  if (strategy === 'min') {
+    const cap  = +document.getElementById('min-capital').value || 0;
+    const n    = +document.getElementById('mv-topn').value || 20;
+    const per  = cap / n;
+    document.getElementById('min-per-stock-label').textContent =
+      `₹${Math.round(per).toLocaleString('en-IN')} per stock (${n} stocks)`;
+  } else {
+    const cap  = +document.getElementById('mom-capital').value || 0;
+    const m    = +document.getElementById('mp-m').value || 8;
+    const per  = cap / m;
+    document.getElementById('mom-per-stock-label').textContent =
+      `₹${Math.round(per).toLocaleString('en-IN')} per stock (${m} stocks)`;
+  }
 }
 
 function _getRebalanceLog(strategy) {
-  const log = window._momLog;
+  const log = strategy === 'min' ? window._minLog : window._momLog;
   return log && log.length ? log[0] : null;  // log[0] is already latest (reversed)
 }
 
@@ -2121,23 +2171,25 @@ function _renderResultRows(results, containerId) {
 }
 
 function _tradeParams(strategy) {
-  const pfx    = 'mom';
+  const pfx    = strategy === 'min' ? 'min' : 'mom';
   const mode   = document.getElementById(`${pfx}-trade-mode`).value;
   const cap    = +document.getElementById(`${pfx}-capital`).value;
-  const stocks = +document.getElementById('mp-m').value || 8;
+  const stocks = strategy === 'min'
+    ? (+document.getElementById('mv-topn').value || 20)
+    : (+document.getElementById('mp-m').value || 8);
   const r = _getRebalanceLog(strategy);
   if (!r) return null;
 
   const to_buy  = mode === 'fresh' ? r.holdings : r.added;
   const to_sell = mode === 'fresh' ? [] : r.removed;
-  return { to_buy, to_sell, capital_per_stock: cap / stocks, mode, r };
+  return { to_buy, to_sell, capital_per_stock: cap / stocks, mode, r, pfx };
 }
 
 async function previewOrders(strategy) {
   const p = _tradeParams(strategy);
   if (!p) { alert('Run a backtest first to generate a rebalance log.'); return; }
 
-  const pfx      = 'mom';
+  const pfx      = p.pfx;
   const statusEl = document.getElementById(`${pfx}TradeStatus`);
   statusEl.textContent = 'Fetching prices…';
 
@@ -2179,7 +2231,7 @@ async function executeOrders(strategy) {
   const p = _tradeParams(strategy);
   if (!p) return;
 
-  const pfx      = 'mom';
+  const pfx      = p.pfx;
   const execBtn  = document.getElementById(`${pfx}ExecBtn`);
   const statusEl = document.getElementById(`${pfx}TradeStatus`);
   execBtn.disabled = true;
