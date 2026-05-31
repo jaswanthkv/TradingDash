@@ -2632,17 +2632,31 @@ function renderScreen() {
 // ── Monthly Report ────────────────────────────────────────────────────────────
 function renderReport() {
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const today  = new Date();
   const yr     = today.getFullYear();
 
+  // Returns [value, monthLabel, ytd] — finds the latest non-null month in the current year
+  // Bug fix: use `v != null` not `v` so that 0.0 is not treated as missing
   function latestMonth(rows) {
-    if (!rows || !rows.length) return [null, null];
+    if (!rows || !rows.length) return [null, null, null];
     const yrRow = rows.slice().reverse().find(r => r.year === yr) || rows[rows.length - 1];
-    let cur = null;
+    let cur = null, label = null;
     for (let i = MONTHS.length - 1; i >= 0; i--) {
-      if (yrRow[MONTHS[i]] != null) { cur = yrRow[MONTHS[i]]; break; }
+      if (yrRow[MONTHS[i]] != null) {
+        cur   = yrRow[MONTHS[i]];
+        label = MONTHS[i] + ' ' + (yrRow.year || yr);
+        break;
+      }
     }
-    return [cur, yrRow.Annual ?? null];
+    return [cur, label, yrRow.Annual ?? null];
+  }
+
+  // Bug fix: never use `+x || null` — 0 is falsy and would become null
+  function _parse(x) {
+    if (x === 'null' || x === 'undefined') return null;
+    const n = +x;
+    return isNaN(n) ? x : n;
   }
 
   function pctStr(v) {
@@ -2670,11 +2684,12 @@ function renderReport() {
   document.getElementById('reportCards').innerHTML = available.map(s => {
     const kpi  = s.data.strategy_kpi  || {};
     const bkpi = s.data.benchmark_kpi || {};
-    const [cur,  ytd]  = latestMonth(s.data.monthly_returns);
-    const [bcur, bytd] = latestMonth(s.data.monthly_bench);
+    const [cur,  curLabel, ytd]  = latestMonth(s.data.monthly_returns);
+    const [bcur, ,         bytd] = latestMonth(s.data.monthly_bench);
     const alphaCur  = (cur  != null && bcur  != null) ? +(cur  - bcur ).toFixed(1) : null;
     const alphaYtd  = (ytd  != null && bytd  != null) ? +(ytd  - bytd ).toFixed(1) : null;
     const alphaCagr = (kpi.cagr_pct != null && bkpi.cagr_pct != null) ? +(kpi.cagr_pct - bkpi.cagr_pct).toFixed(1) : null;
+    const monthLabel = curLabel || 'Last Month';
 
     return `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
@@ -2683,11 +2698,11 @@ function renderReport() {
         <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;
           color:${s.color};margin-bottom:14px">${s.label}</div>
         <div style="display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;margin-bottom:16px">
-          ${['This Month|' + cur + '|' + bcur + '|' + alphaCur,
-             'Year to Date|' + ytd + '|' + bytd + '|' + alphaYtd,
-             'CAGR (inception)|' + kpi.cagr_pct + '|' + bkpi.cagr_pct + '|' + alphaCagr
-            ].map((row, i) => {
-              const [name, val, bval, alpha] = row.split('|').map(x => x === 'null' ? null : isNaN(+x) ? x : +x || null);
+          ${[
+            [monthLabel,       cur,          bcur,          alphaCur],
+            ['YTD ' + yr,      ytd,          bytd,          alphaYtd],
+            ['CAGR (backtest)', kpi.cagr_pct, bkpi.cagr_pct, alphaCagr],
+          ].map(([name, val, bval, alpha], i) => {
               return `${i > 0 ? '<div style="background:var(--border);margin:0 12px"></div>' : ''}
               <div style="padding:0 4px">
                 <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;
@@ -2720,7 +2735,7 @@ function renderReport() {
 
   const runDates = available.map(s => s.data.run_at).filter(Boolean).sort();
   document.getElementById('reportFooterMeta').textContent =
-    'As of ' + (runDates[runDates.length - 1] || '').slice(0, 10) + ' · Backtested returns · Not investment advice';
+    'As of ' + (runDates[runDates.length - 1] || '').slice(0, 10) + ' · Backtest returns · Not investment advice';
 }
 
 // ── Dark mode ─────────────────────────────────────────────────────────────────
