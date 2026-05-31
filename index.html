@@ -71,7 +71,6 @@ a{color:inherit;text-decoration:none}
 .sub-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .sub-tab:hover:not(.active){color:var(--t4)}
 .min-pane{display:none}.min-pane.active{display:block}
-
 /* ── home page ── */
 .home-hero{padding:64px 20px 48px;text-align:center;background:var(--surface);border-bottom:1px solid var(--border)}
 .home-title{font-size:38px;font-weight:800;color:var(--t1);letter-spacing:-1.5px;margin-bottom:12px}
@@ -304,6 +303,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   <div class="nav-right">
     <span class="last-upd" id="navUpdated"></span>
     <button class="btn btn-ghost btn-sm" onclick="location.reload()">↺ Refresh</button>
+    <a href="/report" target="_blank" class="btn btn-ghost btn-sm" title="Open monthly report card">↗ Monthly Report</a>
     <button class="btn-icon" id="darkToggleBtn" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
   </div>
 </div>
@@ -375,17 +375,18 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   <button class="tab active" onclick="switchTab('home',this)">Home</button>
   <button class="tab" onclick="switchTab('portfolio',this)" id="tabPortfolio">Portfolio</button>
   <button class="tab" onclick="switchTab('momentum',this)">Momentum</button>
-  <button class="tab" onclick="switchTab('minervini',this)">Minervini</button>
+  <button class="tab" onclick="switchTab('minervini',this)">Trend Breakout</button>
   <button class="tab" onclick="switchTab('ha',this)">Pulse</button>
+  <button class="tab" onclick="switchTab('report',this)">Monthly Report</button>
 </div>
 
 <!-- ════════════════════ HOME TAB ════════════════════ -->
 <div class="tab-pane active" id="tab-home">
 
   <div class="home-hero">
-    <div class="home-badge">NSE · India · Systematic Trading</div>
+    <div class="home-badge">NSE · India · Systematic Equity</div>
     <div class="home-title">Quant<span>Desk</span></div>
-    <div class="home-sub">Three systematic strategies for NSE. All backtested, all in one place.</div>
+    <div class="home-sub">Institutional-grade, rules-based strategies for NSE-listed equities — backtested, transparent, and ready to deploy.</div>
   </div>
 
   <div class="strategy-grid">
@@ -393,40 +394,43 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
     <!-- Momentum card -->
     <div class="s-card" onclick="goToTab('momentum')">
       <div class="s-card-icon">📈</div>
-      <div class="s-card-name">Momentum</div>
-      <div class="s-card-desc">Ride the winners. Drop the losers. A rules-based portfolio that rotates every month without emotion.</div>
+      <div class="s-card-name">Multi-Factor Momentum</div>
+      <div class="s-card-desc">A cross-sectional ranking engine scoring every stock in the NSE Microcap universe across seven quantitative factors — price momentum, relative strength, trend alignment, Sharpe ratio, and volume expansion. Portfolio rebalances monthly into the top 20 ranked names.</div>
       <div class="s-card-tags">
         <span class="s-tag">NSE Microcap</span>
-        <span class="s-tag">Monthly</span>
+        <span class="s-tag">Monthly Rebalance</span>
+        <span class="s-tag">Long-Only</span>
       </div>
       <div class="s-sparkline" id="spark-mom"></div>
-      <button class="s-card-cta">Open Momentum →</button>
+      <button class="s-card-cta">View Strategy →</button>
     </div>
 
     <!-- Pulse (HA) Strategy card -->
     <div class="s-card" onclick="goToTab('ha')">
       <div class="s-card-icon">⚡</div>
-      <div class="s-card-name">Pulse</div>
-      <div class="s-card-desc">Reads the market's rhythm on NIFTY. In when it aligns. Flat when it doesn't. Powered by Kite.</div>
+      <div class="s-card-name">Pulse — Trend Filter</div>
+      <div class="s-card-desc">A regime-detection model that reads NIFTY 50 market structure using Heikin-Ashi candlestick signals and EMA trend filters. Enters long when the trend confirms; exits to cash when it breaks. Integrated with Zerodha Kite for live execution.</div>
       <div class="s-card-tags">
-        <span class="s-tag">NIFTY</span>
+        <span class="s-tag">NIFTY 50</span>
         <span class="s-tag">Intraday</span>
+        <span class="s-tag">Kite Live</span>
       </div>
       <div class="s-sparkline" id="spark-ha"></div>
-      <button class="s-card-cta">Open Pulse →</button>
+      <button class="s-card-cta">View Strategy →</button>
     </div>
 
     <!-- Minervini SEPA card -->
     <div class="s-card" onclick="goToTab('minervini')">
       <div class="s-card-icon">🏆</div>
-      <div class="s-card-name">Minervini SEPA</div>
-      <div class="s-card-desc">9-criteria price structure filter with RS Rating rank. Only the strongest stocks in a Stage 2 uptrend.</div>
+      <div class="s-card-name">Trend Breakout</div>
+      <div class="s-card-desc">A rigorous 9-criteria price-structure filter that identifies stocks entering a confirmed Stage 2 uptrend — defined by moving average alignment, 52-week range position, and upward slope. Holdings are ranked by Relative Strength rating against the full NSE universe.</div>
       <div class="s-card-tags">
         <span class="s-tag">NSE Microcap</span>
-        <span class="s-tag">Monthly</span>
+        <span class="s-tag">Monthly Rebalance</span>
+        <span class="s-tag">Trend-Following</span>
       </div>
       <div class="s-sparkline" id="spark-min"></div>
-      <button class="s-card-cta">Open Minervini →</button>
+      <button class="s-card-cta">View Strategy →</button>
     </div>
 
   </div>
@@ -486,7 +490,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
         </div>
         <div style="width:1px;height:20px;background:#e2e8f0"></div>
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:#f59e0b;font-weight:600">Minervini</span>
+          <span style="font-size:11px;color:#f59e0b;font-weight:600">Trend Breakout</span>
           <span id="dayMin" style="font-size:15px;font-weight:800">—</span>
           <span id="dayMinDiff" style="font-size:11px;color:#94a3b8"></span>
         </div>
@@ -507,7 +511,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
         </div>
         <div style="width:1px;height:20px;background:#e2e8f0"></div>
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:#f59e0b;font-weight:600">Minervini</span>
+          <span style="font-size:11px;color:#f59e0b;font-weight:600">Trend Breakout</span>
           <span id="mtdMin" style="font-size:15px;font-weight:800">—</span>
           <span id="mtdMinDiff" style="font-size:11px;color:#94a3b8"></span>
         </div>
@@ -532,7 +536,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
           </div>
           <div id="minPortEmpty" class="empty" style="padding:24px">
             <div class="empty-title" style="font-size:13px">No Minervini backtest yet</div>
-            <div class="empty-sub">Go to Minervini tab and run backtest first.</div>
+            <div class="empty-sub">Go to Trend Breakout tab and run backtest first.</div>
           </div>
           <div id="minPortTable" class="hidden">
             <div class="tbl-wrap" style="max-height:420px">
@@ -771,7 +775,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
           <div class="card-head">
             <span class="card-title">Portfolio Growth (₹1 invested)</span>
             <div style="display:flex;gap:16px;font-size:11px;color:var(--t2)">
-              <span><span style="color:var(--accent)">●</span> Minervini SEPA</span>
+              <span><span style="color:var(--accent)">●</span> Trend Breakout</span>
               <span><span style="color:var(--t3)">●</span> Nifty 500</span>
             </div>
           </div>
@@ -880,6 +884,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   </div>
 
 </div>
+
 
 <!-- ════════════════════ HA STRATEGY TAB ════════════════════ -->
 <div class="tab-pane" id="tab-ha">
@@ -1059,6 +1064,40 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   </div>
 </div>
 
+<!-- ════════════════════ REPORT TAB ════════════════════ -->
+<div class="tab-pane" id="tab-report">
+  <div class="page" style="max-width:720px;margin:0 auto;padding:32px 20px">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div>
+        <div style="font-size:20px;font-weight:800;color:var(--t1);letter-spacing:-.3px" id="reportTitle">Monthly Report</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:3px">Performance snapshot · NSE systematic strategies</div>
+      </div>
+      <a href="/report" target="_blank" class="btn btn-ghost btn-sm">↗ Open full-page</a>
+    </div>
+
+    <div id="reportEmpty" style="text-align:center;padding:60px 20px;color:var(--t3)">
+      <div style="font-size:32px;margin-bottom:12px">📊</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px">No backtest data yet</div>
+      <div style="font-size:12px">Run the Momentum and Trend Breakout backtests first, then come back here.</div>
+    </div>
+
+    <div id="reportCards" class="hidden" style="display:flex;flex-direction:column;gap:20px"></div>
+
+    <div id="reportFooter" class="hidden" style="margin-top:24px;padding:14px 20px;
+      background:var(--surface);border:1px solid var(--border);border-radius:10px;
+      display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:12px;font-weight:700;color:var(--t1)">Quant<span style="color:var(--accent)">Desk</span></div>
+      <div style="font-size:11px;color:var(--t3)" id="reportFooterMeta"></div>
+    </div>
+    <div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.7">
+      All returns are from walk-forward backtests on NSE-listed equities. Past performance does not
+      guarantee future results. Transaction costs included. Returns shown in INR.
+    </div>
+
+  </div>
+</div>
+
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const API = '';
@@ -1104,6 +1143,11 @@ function switchTab(name, el) {
     if (window._minData) renderKPIs(window._minData);
     clearTimeout(_pulseRefreshTimer);
     clearInterval(_pulseCountdownTimer);
+  } else if (name === 'report') {
+    clearTimeout(_pulseRefreshTimer);
+    clearInterval(_pulseCountdownTimer);
+    document.getElementById('kpiBar').style.display = 'none';
+    renderReport();
   }
 }
 
@@ -1388,7 +1432,7 @@ function renderPortfolio(d) {
 
   if (!d.minervini && !d.momentum) {
     show('portError');
-    setText('portErrorMsg', 'No strategy data yet — run Minervini and Momentum Backtest first.');
+    setText('portErrorMsg', 'No strategy data yet — run Trend Breakout and Momentum backtest first.');
     return;
   }
 
@@ -2317,11 +2361,11 @@ async function runMinervini() {
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     renderMinervini(data);
-    showToast(`Minervini backtest complete · ${years}y`, 'success');
+    showToast(`Trend Breakout backtest complete · ${years}y`, 'success');
   } catch(e) {
     clearInterval(poll);
     msgEl.textContent = 'Error: ' + e.message;
-    showToast('Minervini backtest failed: ' + e.message, 'error');
+    showToast('Trend Breakout backtest failed: ' + e.message, 'error');
   } finally {
     document.getElementById('btnMin').disabled = false;
     statusEl.style.display = 'none';
@@ -2344,7 +2388,7 @@ function renderMinervini(d) {
     data: {
       labels: d.dates,
       datasets: [
-        { label: 'Minervini SEPA', data: d.strategy_curve, borderColor: '#6366f1',
+        { label: 'Trend Breakout', data: d.strategy_curve, borderColor: '#6366f1',
           backgroundColor: 'rgba(99,102,241,.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1 },
         { label: 'Nifty 500', data: d.benchmark_curve, borderColor: '#94a3b8',
           backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, borderDash: [4,3], tension: 0.1 },
@@ -2493,6 +2537,100 @@ function renderScreen() {
   }).join('');
 }
 
+// ── Monthly Report ────────────────────────────────────────────────────────────
+function renderReport() {
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const today  = new Date();
+  const yr     = today.getFullYear();
+
+  function latestMonth(rows) {
+    if (!rows || !rows.length) return [null, null];
+    const yrRow = rows.slice().reverse().find(r => r.year === yr) || rows[rows.length - 1];
+    let cur = null;
+    for (let i = MONTHS.length - 1; i >= 0; i--) {
+      if (yrRow[MONTHS[i]] != null) { cur = yrRow[MONTHS[i]]; break; }
+    }
+    return [cur, yrRow.Annual ?? null];
+  }
+
+  function pctStr(v) {
+    if (v == null) return '—';
+    return (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  }
+  function clr(v) {
+    if (v == null) return 'var(--t3)';
+    return v >= 0 ? 'var(--green)' : 'var(--red)';
+  }
+
+  const strategies = [
+    { label: 'Multi-Factor Momentum', color: 'var(--accent)', data: window._momData },
+    { label: 'Trend Breakout',        color: '#f59e0b',       data: window._minData },
+  ];
+
+  const available = strategies.filter(s => s.data);
+  if (!available.length) { show('reportEmpty'); hide('reportCards'); hide('reportFooter'); return; }
+
+  hide('reportEmpty'); show('reportCards'); show('reportFooter');
+
+  const month = today.toLocaleString('default', { month: 'long', year: 'numeric' });
+  document.getElementById('reportTitle').textContent = month + ' — Performance Report';
+
+  document.getElementById('reportCards').innerHTML = available.map(s => {
+    const kpi  = s.data.strategy_kpi  || {};
+    const bkpi = s.data.benchmark_kpi || {};
+    const [cur,  ytd]  = latestMonth(s.data.monthly_returns);
+    const [bcur, bytd] = latestMonth(s.data.monthly_bench);
+    const alphaCur  = (cur  != null && bcur  != null) ? +(cur  - bcur ).toFixed(1) : null;
+    const alphaYtd  = (ytd  != null && bytd  != null) ? +(ytd  - bytd ).toFixed(1) : null;
+    const alphaCagr = (kpi.cagr_pct != null && bkpi.cagr_pct != null) ? +(kpi.cagr_pct - bkpi.cagr_pct).toFixed(1) : null;
+
+    return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
+      overflow:hidden;border-left:4px solid ${s.color}">
+      <div style="padding:18px 22px 14px">
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;
+          color:${s.color};margin-bottom:14px">${s.label}</div>
+        <div style="display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;margin-bottom:16px">
+          ${['This Month|' + cur + '|' + bcur + '|' + alphaCur,
+             'Year to Date|' + ytd + '|' + bytd + '|' + alphaYtd,
+             'CAGR (inception)|' + kpi.cagr_pct + '|' + bkpi.cagr_pct + '|' + alphaCagr
+            ].map((row, i) => {
+              const [name, val, bval, alpha] = row.split('|').map(x => x === 'null' ? null : isNaN(+x) ? x : +x || null);
+              return `${i > 0 ? '<div style="background:var(--border);margin:0 12px"></div>' : ''}
+              <div style="padding:0 4px">
+                <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;
+                  letter-spacing:.07em;margin-bottom:5px">${name}</div>
+                <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:3px;
+                  color:${clr(val)}">${pctStr(val)}</div>
+                <div style="font-size:10px;color:var(--t3)">
+                  Nifty 500 ${pctStr(bval)} &nbsp;·&nbsp;
+                  <span style="color:${clr(alpha)}">α ${pctStr(alpha)}</span>
+                </div>
+              </div>`;
+            }).join('')}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);
+          padding-top:14px;gap:8px;text-align:center">
+          ${[
+            ['Sharpe',       kpi.sharpe?.toFixed(2)             ?? '—'],
+            ['Max Drawdown', kpi.max_dd_pct != null ? pctStr(kpi.max_dd_pct) : '—'],
+            ['Win Rate',     kpi.win_rate_pct != null ? kpi.win_rate_pct.toFixed(0) + '%' : '—'],
+            ['Months',       kpi.total_months ?? '—'],
+          ].map(([name, val]) => `
+            <div>
+              <div style="font-size:16px;font-weight:700;color:var(--t1);margin-bottom:2px">${val}</div>
+              <div style="font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.06em">${name}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const runDates = available.map(s => s.data.run_at).filter(Boolean).sort();
+  document.getElementById('reportFooterMeta').textContent =
+    'As of ' + (runDates[runDates.length - 1] || '').slice(0, 10) + ' · Backtested returns · Not investment advice';
+}
+
 // ── Dark mode ─────────────────────────────────────────────────────────────────
 function initDark() {
   const saved = localStorage.getItem('theme') || 'light';
@@ -2550,7 +2688,7 @@ function round4(v) { return Math.round(v * 10000) / 10000; }
 
 async function init() {
   initDark();
-  const validTabs = ['home', 'portfolio', 'momentum', 'minervini', 'ha'];
+  const validTabs = ['home', 'portfolio', 'momentum', 'minervini', 'ha', 'report'];
   const hashTab = window.location.hash.slice(1);
   if (hashTab && validTabs.includes(hashTab)) goToTab(hashTab);
 

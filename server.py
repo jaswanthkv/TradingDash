@@ -65,6 +65,7 @@ _min_bt_cache: dict    = db.get_latest_backtest(strategy="minervini")
 _min_bt_running: bool  = False
 _min_bt_progress: dict = {"step": 0, "total": 5, "msg": ""}
 
+
 _ml_rank_cache: dict = db.get_latest_rank_snapshot()
 _ml_rank_ts:    float = 0.0   # force a fresh fetch on first request
 _ML_RANK_TTL    = 300         # seconds
@@ -649,6 +650,183 @@ async def orders_execute(params: OrderParams):
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
+
+@app.get("/report", response_class=HTMLResponse)
+def monthly_report():
+    """Self-contained monthly performance report card — screenshot and share."""
+    from datetime import date as _date
+
+    today = _date.today()
+    month_name = today.strftime("%B %Y")
+    MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+
+    def _latest_month(rows: list[dict]) -> tuple[float | None, float | None]:
+        """Return (current_month_pct, ytd_pct) from a monthly_returns grid."""
+        if not rows:
+            return None, None
+        yr_row = next((r for r in reversed(rows) if r.get("year") == today.year), None)
+        if not yr_row:
+            yr_row = rows[-1]
+        # find latest non-None month
+        cur = None
+        for m in reversed(MONTHS):
+            if yr_row.get(m) is not None:
+                cur = yr_row[m]
+                break
+        ytd = yr_row.get("Annual")
+        return cur, ytd
+
+    def _card(label: str, cache: dict | None, color: str) -> dict:
+        if not cache:
+            return {"label": label, "color": color, "available": False}
+        kpi = cache.get("strategy_kpi", {})
+        bkpi = cache.get("benchmark_kpi", {})
+        cur, ytd = _latest_month(cache.get("monthly_returns", []))
+        bcur, bytd = _latest_month(cache.get("monthly_bench", []))
+        run_at = cache.get("run_at", "")[:10]
+        return {
+            "label":     label,
+            "color":     color,
+            "available": True,
+            "cagr":      kpi.get("cagr_pct"),
+            "sharpe":    kpi.get("sharpe"),
+            "max_dd":    kpi.get("max_dd_pct"),
+            "win_rate":  kpi.get("win_rate_pct"),
+            "months":    kpi.get("total_months"),
+            "cur":       cur,
+            "ytd":       ytd,
+            "bcur":      bcur,
+            "bytd":      bytd,
+            "b_cagr":    bkpi.get("cagr_pct"),
+            "run_at":    run_at,
+        }
+
+    cards = [
+        _card("Multi-Factor Momentum", _mom_bt_cache, "#6366f1"),
+        _card("Trend Breakout",        _min_bt_cache, "#f59e0b"),
+    ]
+
+    def _pct(v, decimals=1):
+        if v is None: return "—"
+        sign = "+" if v >= 0 else ""
+        return f"{sign}{v:.{decimals}f}%"
+
+    def _clr(v):
+        if v is None: return "#94a3b8"
+        return "#16a34a" if v >= 0 else "#dc2626"
+
+    def _num(v, decimals=2):
+        if v is None: return "—"
+        return f"{v:.{decimals}f}"
+
+    def _strategy_block(c: dict) -> str:
+        if not c["available"]:
+            return f'<div class="strategy-card" style="border-left:4px solid {c["color"]};opacity:.5"><div class="s-label" style="color:{c["color"]}">{c["label"]}</div><div style="color:#94a3b8;font-size:13px;padding:20px 0">No backtest data — run backtest first.</div></div>'
+
+        alpha_cur  = None if (c["cur"]  is None or c["bcur"]  is None) else round(c["cur"]  - c["bcur"],  1)
+        alpha_ytd  = None if (c["ytd"]  is None or c["bytd"]  is None) else round(c["ytd"]  - c["bytd"],  1)
+        alpha_cagr = None if (c["cagr"] is None or c["b_cagr"] is None) else round(c["cagr"] - c["b_cagr"], 1)
+
+        return f"""
+        <div class="strategy-card" style="border-left:4px solid {c['color']}">
+          <div class="s-label" style="color:{c['color']}">{c['label']}</div>
+          <div class="period-row">
+            <div class="period-block">
+              <div class="period-name">This Month</div>
+              <div class="period-val" style="color:{_clr(c['cur'])}">{_pct(c['cur'])}</div>
+              <div class="period-bench">Nifty 500 {_pct(c['bcur'])} &nbsp;·&nbsp; <span style="color:{_clr(alpha_cur)}">α {_pct(alpha_cur)}</span></div>
+            </div>
+            <div class="period-divider"></div>
+            <div class="period-block">
+              <div class="period-name">Year to Date</div>
+              <div class="period-val" style="color:{_clr(c['ytd'])}">{_pct(c['ytd'])}</div>
+              <div class="period-bench">Nifty 500 {_pct(c['bytd'])} &nbsp;·&nbsp; <span style="color:{_clr(alpha_ytd)}">α {_pct(alpha_ytd)}</span></div>
+            </div>
+            <div class="period-divider"></div>
+            <div class="period-block">
+              <div class="period-name">CAGR (inception)</div>
+              <div class="period-val" style="color:{_clr(c['cagr'])}">{_pct(c['cagr'])}</div>
+              <div class="period-bench">Nifty 500 {_pct(c['b_cagr'])} &nbsp;·&nbsp; <span style="color:{_clr(alpha_cagr)}">α {_pct(alpha_cagr)}</span></div>
+            </div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi-block"><div class="kpi-val">{_num(c['sharpe'])}</div><div class="kpi-name">Sharpe</div></div>
+            <div class="kpi-block"><div class="kpi-val" style="color:#dc2626">{_pct(c['max_dd'])}</div><div class="kpi-name">Max Drawdown</div></div>
+            <div class="kpi-block"><div class="kpi-val">{_num(c['win_rate'], 0)}%</div><div class="kpi-name">Win Rate</div></div>
+            <div class="kpi-block"><div class="kpi-val">{c['months'] or '—'}</div><div class="kpi-name">Months Tested</div></div>
+          </div>
+        </div>"""
+
+    blocks = "\n".join(_strategy_block(c) for c in cards)
+    run_dates = [c["run_at"] for c in cards if c.get("run_at")]
+    footer_date = max(run_dates) if run_dates else str(today)
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>QuantDesk — {month_name} Report</title>
+<style>
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1e293b;
+  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px}}
+.card{{background:#fff;border-radius:20px;box-shadow:0 4px 40px rgba(0,0,0,.10);
+  width:100%;max-width:680px;overflow:hidden}}
+.card-header{{background:linear-gradient(135deg,#1e293b 0%,#334155 100%);
+  padding:32px 36px 28px;color:#fff}}
+.badge{{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+  border-radius:20px;font-size:11px;font-weight:600;color:rgba(255,255,255,.8);margin-bottom:14px}}
+.report-title{{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px}}
+.report-title span{{color:#818cf8}}
+.report-sub{{font-size:13px;color:rgba(255,255,255,.6);margin-top:6px}}
+.card-body{{padding:28px 36px 32px;display:flex;flex-direction:column;gap:20px}}
+.strategy-card{{background:#f8fafc;border-radius:12px;padding:20px 22px;border:1px solid #e2e8f0}}
+.s-label{{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px}}
+.period-row{{display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;gap:0;margin-bottom:16px}}
+.period-divider{{background:#e2e8f0;margin:0 12px}}
+.period-block{{padding:0 4px}}
+.period-name{{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}}
+.period-val{{font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:3px}}
+.period-bench{{font-size:10px;color:#94a3b8}}
+.kpi-row{{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #e2e8f0;padding-top:14px;gap:8px}}
+.kpi-block{{text-align:center}}
+.kpi-val{{font-size:16px;font-weight:700;color:#1e293b;margin-bottom:2px}}
+.kpi-name{{font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.06em}}
+.card-footer{{border-top:1px solid #e2e8f0;padding:14px 36px;display:flex;
+  align-items:center;justify-content:space-between;background:#f8fafc}}
+.footer-brand{{font-size:13px;font-weight:700;color:#1e293b}}
+.footer-brand span{{color:#6366f1}}
+.footer-meta{{font-size:11px;color:#94a3b8}}
+.disclaimer{{font-size:10px;color:#94a3b8;padding:0 36px 20px;line-height:1.6}}
+@media print{{body{{background:#fff;padding:0}}}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="card-header">
+    <div class="badge">NSE India · Systematic Equity · Rules-Based</div>
+    <div class="report-title">Quant<span>Desk</span> — {month_name}</div>
+    <div class="report-sub">Monthly performance update across systematic strategies</div>
+  </div>
+  <div class="card-body">
+    {blocks}
+  </div>
+  <div class="card-footer">
+    <div class="footer-brand">Quant<span>Desk</span></div>
+    <div class="footer-meta">As of {footer_date} · Backtested returns · Not investment advice</div>
+  </div>
+  <div class="disclaimer">
+    All returns are from walk-forward backtests on NSE-listed equities. Past performance does not guarantee future results.
+    Transaction costs included. Returns shown in INR. Universe: NSE Microcap 250.
+  </div>
+</div>
+</body>
+</html>"""
+
+    return HTMLResponse(content=html)
+
 
 @app.get("/", response_class=HTMLResponse)
 def root():
