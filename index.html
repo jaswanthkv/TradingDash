@@ -281,6 +281,59 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
 .skel-block{height:110px;border-radius:6px;margin:12px 0}
 .skel-header{height:13px;width:40%;margin-bottom:14px}
 
+/* smooth scroll + better scrollbar */
+html { scroll-behavior: smooth }
+::-webkit-scrollbar { width: 5px; height: 5px }
+::-webkit-scrollbar-track { background: transparent }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px }
+::-webkit-scrollbar-thumb:hover { background: var(--t3) }
+
+/* better focus ring */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px }
+
+/* nav improvements */
+.nav { gap: 8px }
+.logo { font-size: 16px; letter-spacing: -.5px }
+
+/* card depth */
+.card { box-shadow: 0 1px 4px var(--shadow) }
+.card:hover { box-shadow: 0 4px 16px var(--shadow) }
+
+/* button active state */
+.btn:active { transform: scale(0.97) }
+
+/* tab active indicator animation */
+.tab { transition: color .15s, border-color .15s }
+
+/* param-row improvement */
+.param-row { gap: 12px }
+
+/* home hero gradient */
+.home-hero { background: linear-gradient(160deg, var(--surface) 60%, var(--accent-subtle) 100%) }
+
+/* strategy card accent */
+.s-card { border-top: 3px solid transparent }
+.s-card:hover { border-top-color: var(--accent) }
+
+/* kpi bar better visual grouping */
+.kpi-bar { box-shadow: 0 1px 0 var(--border) }
+
+/* section divider style for HA backtest label */
+.section-divider { display: flex; align-items: center; gap: 12px; padding: 16px 20px 8px;
+  font-size: 10px; font-weight: 800; color: var(--t3); text-transform: uppercase; letter-spacing: .12em }
+.section-divider::after { content: ''; flex: 1; height: 1px; background: var(--border) }
+
+/* port day bar using CSS vars */
+.day-bar { background: var(--surface); border-bottom: 1px solid var(--border) }
+.day-bar-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding: 10px 0 }
+.day-bar-row + .day-bar-row { border-top: 1px solid var(--border-inner) }
+.day-bar-label { font-size: 10px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .07em; width: 90px; flex-shrink: 0 }
+.day-bar-sep { width: 1px; height: 20px; background: var(--border) }
+.day-bar-item { display: flex; align-items: center; gap: 6px }
+.day-bar-name { font-size: 11px; font-weight: 600; color: var(--t2) }
+.day-bar-val { font-size: 15px; font-weight: 800; color: var(--t1) }
+.day-bar-diff { font-size: 11px; color: var(--t3) }
+
 /* ── toast ── */
 #toast-container{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;
   gap:8px;z-index:9999;pointer-events:none}
@@ -293,6 +346,33 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
 .toast.t-info{background:var(--accent-subtle);color:var(--accent-text);border:1px solid var(--accent-border)}
 .toast.t-hide{opacity:0;transform:translateY(6px)}
 @keyframes t-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ── polish & dark-mode fixes ── */
+html{scroll-behavior:smooth}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
+::-webkit-scrollbar-thumb:hover{background:var(--t3)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.btn:active{transform:scale(.97)}
+.card{box-shadow:0 1px 4px var(--shadow)}
+.home-hero{background:linear-gradient(160deg,var(--surface) 60%,var(--accent-subtle) 100%)}
+.s-card{border-top:3px solid transparent;transition:all .2s}
+.s-card:hover{border-top-color:var(--accent)}
+.section-divider{display:flex;align-items:center;gap:12px;padding:16px 20px 8px;
+  font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.12em}
+.section-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+/* day-bar: portfolio performance comparison strip */
+.day-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px}
+.day-bar-row{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:10px 0}
+.day-bar-row+.day-bar-row{border-top:1px solid var(--border-inner)}
+.day-bar-label{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;
+  letter-spacing:.07em;width:90px;flex-shrink:0}
+.day-bar-sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
+.day-bar-item{display:flex;align-items:center;gap:6px}
+.day-bar-name{font-size:11px;font-weight:600;color:var(--t2)}
+.day-bar-val{font-size:15px;font-weight:800;color:var(--t1)}
+.day-bar-diff{font-size:11px;color:var(--t3)}
 </style>
 </head>
 <body>
@@ -303,7 +383,6 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   <div class="nav-right">
     <span class="last-upd" id="navUpdated"></span>
     <button class="btn btn-ghost btn-sm" onclick="location.reload()">↺ Refresh</button>
-    <a href="/report" target="_blank" class="btn btn-ghost btn-sm" title="Open monthly report card">↗ Monthly Report</a>
     <button class="btn-icon" id="darkToggleBtn" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
   </div>
 </div>
@@ -377,7 +456,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   <button class="tab" onclick="switchTab('momentum',this)">Momentum</button>
   <button class="tab" onclick="switchTab('minervini',this)">Trend Breakout</button>
   <button class="tab" onclick="switchTab('ha',this)">Pulse</button>
-  <button class="tab" onclick="switchTab('report',this)">Monthly Report</button>
+  <button class="tab" onclick="switchTab('report',this)">Report</button>
 </div>
 
 <!-- ════════════════════ HOME TAB ════════════════════ -->
@@ -441,7 +520,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
 
   <!-- meta bar -->
   <div class="port-meta">
-    <span style="font-weight:700;color:#1e293b">Strategy Portfolios</span>
+    <span style="font-weight:700;color:var(--t1)">Strategy Portfolios</span>
     <span id="portLastUpd" class="d" style="font-size:11px">—</span>
     <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
       <span id="portRebalBadge" class="rebal-badge" style="display:none"></span>
@@ -479,47 +558,45 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   <div id="portContent" class="hidden">
 
     <!-- Performance comparison bar -->
-    <div id="portDayBar" style="background:#fff;border-bottom:1px solid #e2e8f0;padding:0 20px">
-      <!-- Last Session row -->
-      <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #f1f5f9">
-        <span style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;width:90px">Last Session</span>
-        <span id="dayAsOf" style="font-size:11px;color:#94a3b8"></span>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:#64748b">Nifty 500</span>
-          <span id="dayN500" style="font-size:15px;font-weight:800">—</span>
+    <div id="portDayBar" class="day-bar" style="padding:0 20px">
+      <div class="day-bar-row">
+        <span class="day-bar-label">Last Session</span>
+        <span id="dayAsOf" style="font-size:11px;color:var(--t3)"></span>
+        <div class="day-bar-item">
+          <span class="day-bar-name">Nifty 500</span>
+          <span id="dayN500" class="day-bar-val">—</span>
         </div>
-        <div style="width:1px;height:20px;background:#e2e8f0"></div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:#f59e0b;font-weight:600">Trend Breakout</span>
-          <span id="dayMin" style="font-size:15px;font-weight:800">—</span>
-          <span id="dayMinDiff" style="font-size:11px;color:#94a3b8"></span>
+        <div class="day-bar-sep"></div>
+        <div class="day-bar-item">
+          <span class="day-bar-name" style="color:#f59e0b">Trend Breakout</span>
+          <span id="dayMin" class="day-bar-val">—</span>
+          <span id="dayMinDiff" class="day-bar-diff"></span>
         </div>
-        <div style="width:1px;height:20px;background:#e2e8f0"></div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:#0891b2;font-weight:600">Momentum</span>
-          <span id="dayMom" style="font-size:15px;font-weight:800">—</span>
-          <span id="dayMomDiff" style="font-size:11px;color:#94a3b8"></span>
+        <div class="day-bar-sep"></div>
+        <div class="day-bar-item">
+          <span class="day-bar-name" style="color:#0891b2">Momentum</span>
+          <span id="dayMom" class="day-bar-val">—</span>
+          <span id="dayMomDiff" class="day-bar-diff"></span>
         </div>
       </div>
-      <!-- Current Month row -->
-      <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:10px 0">
-        <span style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;width:90px">Current Month</span>
-        <span id="mtdAsOf" style="font-size:11px;color:#94a3b8"></span>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:#64748b">Nifty 500</span>
-          <span id="mtdN500" style="font-size:15px;font-weight:800">—</span>
+      <div class="day-bar-row">
+        <span class="day-bar-label">Current Month</span>
+        <span id="mtdAsOf" style="font-size:11px;color:var(--t3)"></span>
+        <div class="day-bar-item">
+          <span class="day-bar-name">Nifty 500</span>
+          <span id="mtdN500" class="day-bar-val">—</span>
         </div>
-        <div style="width:1px;height:20px;background:#e2e8f0"></div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:#f59e0b;font-weight:600">Trend Breakout</span>
-          <span id="mtdMin" style="font-size:15px;font-weight:800">—</span>
-          <span id="mtdMinDiff" style="font-size:11px;color:#94a3b8"></span>
+        <div class="day-bar-sep"></div>
+        <div class="day-bar-item">
+          <span class="day-bar-name" style="color:#f59e0b">Trend Breakout</span>
+          <span id="mtdMin" class="day-bar-val">—</span>
+          <span id="mtdMinDiff" class="day-bar-diff"></span>
         </div>
-        <div style="width:1px;height:20px;background:#e2e8f0"></div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:#0891b2;font-weight:600">Momentum</span>
-          <span id="mtdMom" style="font-size:15px;font-weight:800">—</span>
-          <span id="mtdMomDiff" style="font-size:11px;color:#94a3b8"></span>
+        <div class="day-bar-sep"></div>
+        <div class="day-bar-item">
+          <span class="day-bar-name" style="color:#0891b2">Momentum</span>
+          <span id="mtdMom" class="day-bar-val">—</span>
+          <span id="mtdMomDiff" class="day-bar-diff"></span>
         </div>
         <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadDayChange()">↻</button>
       </div>
@@ -576,7 +653,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
                 <tbody id="momPortBody"></tbody>
               </table>
             </div>
-            <div id="momPortChanges" style="padding:10px 16px;border-top:1px solid #f1f5f9;font-size:11px"></div>
+            <div id="momPortChanges" style="padding:10px 16px;border-top:1px solid var(--border-inner);font-size:11px;color:var(--t2)"></div>
           </div>
         </div>
 
@@ -591,7 +668,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
 
   <div class="param-row">
     <div class="param-group">
-      <label>Portfolio Size (m)</label>
+      <label>Holdings</label>
       <select id="mp-m">
         <option value="8" selected>8</option>
         <option value="10">10</option>
@@ -601,7 +678,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
     </div>
     <div class="param-sep">·</div>
     <div class="param-group">
-      <label>Replace per month (x)</label>
+      <label>Monthly Rotation</label>
       <select id="mp-x">
         <option value="1">1</option>
         <option value="2">2</option>
@@ -643,9 +720,9 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
       <div class="card">
         <div class="card-head">
           <span class="card-title">Portfolio Growth (₹1 invested)</span>
-          <div style="display:flex;gap:16px;font-size:11px;color:#6b7280">
-            <span><span style="color:#6366f1">●</span> Momentum</span>
-            <span><span style="color:#94a3b8">●</span> Nifty 500</span>
+          <div style="display:flex;gap:16px;font-size:11px;color:var(--t2)">
+            <span><span style="color:var(--accent)">●</span> Momentum</span>
+            <span><span style="color:var(--t3)">●</span> Nifty 500</span>
           </div>
         </div>
         <div class="chart-wrap"><canvas id="momGrowthChart"></canvas></div>
@@ -653,7 +730,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
       <div class="card">
         <div class="card-head">
           <span class="card-title">Monthly Returns Heatmap — Strategy vs Nifty 500</span>
-          <span style="font-size:11px;color:#94a3b8">green = positive · red = negative</span>
+          <span style="font-size:11px;color:var(--t3)">green = positive · red = negative</span>
         </div>
         <div class="card-body" style="padding:0">
           <div class="heatmap-wrap" id="momHeatmapWrap"></div>
@@ -663,7 +740,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
       <div class="trade-panel" id="momTradePanel">
         <div class="trade-panel-head">
           <span class="trade-panel-title">⚡ Execute Rebalance via Kite</span>
-          <span style="font-size:11px;color:#94a3b8">Latest rebalance only · CNC Market orders</span>
+          <span style="font-size:11px;color:var(--t3)">Latest rebalance only · CNC Market orders</span>
         </div>
         <div style="padding:14px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
           <div class="param-group">
@@ -678,15 +755,15 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
             <label>Total Capital (₹)</label>
             <input id="mom-capital" type="number" value="500000" step="50000" min="100000" style="width:130px" oninput="_updatePerStockLabel('mom')"/>
           </div>
-          <div style="font-size:11px;color:#64748b" id="mom-per-stock-label">₹62,500 per stock (8 stocks)</div>
+          <div style="font-size:11px;color:var(--t2)" id="mom-per-stock-label">₹62,500 per stock (8 stocks)</div>
           <button class="btn btn-ghost btn-sm" onclick="previewOrders('mom')">Preview Orders</button>
-          <span id="momTradeStatus" style="font-size:11px;color:#94a3b8"></span>
+          <span id="momTradeStatus" style="font-size:11px;color:var(--t3)"></span>
         </div>
         <div id="momOrderPreview" class="hidden">
           <div id="momOrderRows"></div>
           <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
-            border-top:1px solid #f1f5f9;background:#f8fafc">
-            <div style="font-size:12px;color:#64748b" id="momOrderSummary"></div>
+            border-top:1px solid var(--border-inner);background:var(--bg-alt)">
+            <div style="font-size:12px;color:var(--t2)" id="momOrderSummary"></div>
             <button class="btn btn-primary btn-sm" onclick="executeOrders('mom')" id="momExecBtn">
               Execute All Orders
             </button>
@@ -697,18 +774,18 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
         </div>
         <div id="momOrderResults" class="hidden">
           <div id="momResultRows"></div>
-          <div style="padding:10px 16px;font-size:12px;color:#64748b;border-top:1px solid #f1f5f9;
-            background:#f8fafc" id="momResultSummary"></div>
+          <div style="padding:10px 16px;font-size:12px;color:var(--t2);border-top:1px solid var(--border-inner);
+            background:var(--bg-alt)" id="momResultSummary"></div>
         </div>
       </div>
 
       <div class="card">
         <div class="card-head">
           <span class="card-title">Rebalancing History</span>
-          <span id="momHistMeta" style="font-size:11px;color:#94a3b8"></span>
+          <span id="momHistMeta" style="font-size:11px;color:var(--t3)"></span>
         </div>
         <div id="momHistResults" style="display:grid;grid-template-columns:1fr 2fr;gap:0">
-          <div style="border-right:1px solid #e2e8f0;overflow-y:auto;max-height:420px" id="momHistList"></div>
+          <div style="border-right:1px solid var(--border);overflow-y:auto;max-height:420px" id="momHistList"></div>
           <div id="momHistDetail" style="overflow-y:auto;max-height:420px"></div>
         </div>
       </div>
@@ -793,7 +870,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
         <div class="trade-panel" id="minTradePanel">
           <div class="trade-panel-head">
             <span class="trade-panel-title">⚡ Execute Rebalance via Kite</span>
-            <span style="font-size:11px;color:#94a3b8">Latest rebalance only · CNC Market orders</span>
+            <span style="font-size:11px;color:var(--t3)">Latest rebalance only · CNC Market orders</span>
           </div>
           <div style="padding:14px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
             <div class="param-group">
@@ -808,15 +885,15 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
               <label>Total Capital (₹)</label>
               <input id="min-capital" type="number" value="500000" step="50000" min="100000" style="width:130px" oninput="_updatePerStockLabel('min')"/>
             </div>
-            <div style="font-size:11px;color:#64748b" id="min-per-stock-label">₹25,000 per stock (20 stocks)</div>
+            <div style="font-size:11px;color:var(--t2)" id="min-per-stock-label">₹25,000 per stock (20 stocks)</div>
             <button class="btn btn-ghost btn-sm" onclick="previewOrders('min')">Preview Orders</button>
-            <span id="minTradeStatus" style="font-size:11px;color:#94a3b8"></span>
+            <span id="minTradeStatus" style="font-size:11px;color:var(--t3)"></span>
           </div>
           <div id="minOrderPreview" class="hidden">
             <div id="minOrderRows"></div>
             <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
-              border-top:1px solid #f1f5f9;background:#f8fafc">
-              <div style="font-size:12px;color:#64748b" id="minOrderSummary"></div>
+              border-top:1px solid var(--border-inner);background:var(--bg-alt)">
+              <div style="font-size:12px;color:var(--t2)" id="minOrderSummary"></div>
               <button class="btn btn-primary btn-sm" onclick="executeOrders('min')" id="minExecBtn">
                 Execute All Orders
               </button>
@@ -827,8 +904,8 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
           </div>
           <div id="minOrderResults" class="hidden">
             <div id="minResultRows"></div>
-            <div style="padding:10px 16px;font-size:12px;color:#64748b;border-top:1px solid #f1f5f9;
-              background:#f8fafc" id="minResultSummary"></div>
+            <div style="padding:10px 16px;font-size:12px;color:var(--t2);border-top:1px solid var(--border-inner);
+              background:var(--bg-alt)" id="minResultSummary"></div>
           </div>
         </div>
 
@@ -851,7 +928,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
     <div class="param-row" style="gap:12px">
       <span style="font-size:12px;font-weight:600;color:var(--t2)">Filter:</span>
       <button class="btn btn-primary btn-sm" id="flt-all"    onclick="filterScreen('all')">All</button>
-      <button class="btn btn-ghost btn-sm"   id="flt-full"   onclick="filterScreen('full')">Full SEPA (9/9)</button>
+      <button class="btn btn-ghost btn-sm"   id="flt-full"   onclick="filterScreen('full')">Full Pass (9/9)</button>
       <button class="btn btn-ghost btn-sm"   id="flt-near"   onclick="filterScreen('near')">Near Setup (7–8/9)</button>
       <span id="screenCount" style="font-size:11px;color:var(--t3);margin-left:8px"></span>
       <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadMinerviniScreen()">↺ Refresh</button>
@@ -890,8 +967,8 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
 <div class="tab-pane" id="tab-ha">
 
   <div id="kiteBar" style="display:flex;align-items:center;gap:10px;padding:10px 20px;
-    background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:12px">
-    <span id="kiteStatus" style="color:#94a3b8">Checking Kite…</span>
+    background:var(--bg-alt);border-bottom:1px solid var(--border);font-size:12px">
+    <span id="kiteStatus" style="color:var(--t3)">Checking Kite…</span>
     <a href="/api/kite/login" id="kiteLoginBtn" class="btn btn-primary btn-sm hidden">Connect Kite</a>
   </div>
 
@@ -901,8 +978,8 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
       <div class="trade-panel-head" style="display:flex;align-items:center;justify-content:space-between">
         <span class="trade-panel-title">⚡ Live Signal</span>
         <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:11px;color:#94a3b8" id="pulseSignalTime"></span>
-          <span style="font-size:11px;color:#6366f1;font-weight:600" id="pulseCountdown"></span>
+          <span style="font-size:11px;color:var(--t3)" id="pulseSignalTime"></span>
+          <span style="font-size:11px;color:var(--accent);font-weight:600" id="pulseCountdown"></span>
           <button class="btn btn-ghost btn-sm" onclick="loadPulseSignal()">↺ Refresh</button>
         </div>
       </div>
@@ -910,40 +987,40 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
       <!-- Signal row -->
       <div style="padding:16px;display:grid;grid-template-columns:auto auto 1fr auto;align-items:center;gap:20px"
            id="pulseSignalRow">
-        <div style="text-align:center;padding-right:20px;border-right:1px solid #f1f5f9">
-          <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Active Position</div>
+        <div style="text-align:center;padding-right:20px;border-right:1px solid var(--border-inner)">
+          <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Active Position</div>
           <div style="font-size:26px;font-weight:800;letter-spacing:-1px" id="pulseActiveBadge">—</div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:4px" id="pulseActiveSince"></div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px" id="pulseActiveSince"></div>
         </div>
-        <div style="text-align:center;padding-right:20px;border-right:1px solid #f1f5f9">
-          <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Latest Candle</div>
+        <div style="text-align:center;padding-right:20px;border-right:1px solid var(--border-inner)">
+          <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Latest Candle</div>
           <div style="font-size:18px;font-weight:700" id="pulseSignalBadge">—</div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" id="pulseSignalStats"></div>
         <div style="text-align:right">
-          <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">NIFTY</div>
-          <div style="font-size:24px;font-weight:700;color:#1e293b" id="pulseNiftyPrice">—</div>
+          <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">NIFTY</div>
+          <div style="font-size:24px;font-weight:700;color:var(--t1)" id="pulseNiftyPrice">—</div>
         </div>
       </div>
 
       <!-- Option to sell -->
-      <div id="pulseOptionPanel" class="hidden" style="border-top:1px solid #f1f5f9">
+      <div id="pulseOptionPanel" class="hidden" style="border-top:1px solid var(--border-inner)">
         <div style="padding:14px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
           <div>
-            <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Sell</div>
-            <div style="font-size:15px;font-weight:700;color:#1e293b" id="pulseOptSymbol">—</div>
+            <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Sell</div>
+            <div style="font-size:15px;font-weight:700;color:var(--t1)" id="pulseOptSymbol">—</div>
           </div>
           <div>
-            <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Expiry</div>
-            <div style="font-size:13px;font-weight:600;color:#64748b" id="pulseOptExpiry">—</div>
+            <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Expiry</div>
+            <div style="font-size:13px;font-weight:600;color:var(--t2)" id="pulseOptExpiry">—</div>
           </div>
           <div>
-            <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">LTP</div>
-            <div style="font-size:15px;font-weight:700;color:#6366f1" id="pulseOptLTP">—</div>
+            <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">LTP</div>
+            <div style="font-size:15px;font-weight:700;color:var(--accent)" id="pulseOptLTP">—</div>
           </div>
           <div>
-            <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Premium (1 lot)</div>
-            <div style="font-size:15px;font-weight:700;color:#16a34a" id="pulseOptPremium">—</div>
+            <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Premium (1 lot)</div>
+            <div style="font-size:15px;font-weight:700;color:var(--green)" id="pulseOptPremium">—</div>
           </div>
           <div class="param-group" style="margin-left:auto">
             <label>Lots</label>
@@ -951,7 +1028,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
                    oninput="updatePulsePremium()"/>
           </div>
           <button class="btn btn-primary" onclick="executePulseSell()" id="pulseSellBtn">Sell Option</button>
-          <span id="pulseTradeStatus" style="font-size:11px;color:#94a3b8"></span>
+          <span id="pulseTradeStatus" style="font-size:11px;color:var(--t3)"></span>
         </div>
         <div class="trade-warning">
           ⚠️ Sells a NIFTY monthly option on Kite (NRML). Only during market hours. Margin will be blocked.
@@ -959,21 +1036,20 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
       </div>
 
       <!-- Open positions -->
-      <div id="pulsePositionsPanel" class="hidden" style="border-top:1px solid #f1f5f9">
-        <div style="padding:10px 16px;font-size:11px;font-weight:700;color:#94a3b8;
+      <div id="pulsePositionsPanel" class="hidden" style="border-top:1px solid var(--border-inner)">
+        <div style="padding:10px 16px;font-size:11px;font-weight:700;color:var(--t3);
           text-transform:uppercase;letter-spacing:.08em">Open Positions</div>
         <div id="pulsePositionRows"></div>
       </div>
 
-      <div id="pulseSignalEmpty" style="padding:32px;text-align:center;color:#94a3b8;font-size:12px">
+      <div id="pulseSignalEmpty" style="padding:32px;text-align:center;color:var(--t3);font-size:12px">
         Click <strong>Refresh</strong> to fetch the latest NIFTY signal from Kite.
       </div>
     </div>
   </div>
 
   <!-- Backtest section divider -->
-  <div style="padding:12px 20px 0;font-size:11px;font-weight:700;color:#94a3b8;
-    text-transform:uppercase;letter-spacing:.08em">Backtest</div>
+  <div class="section-divider">Backtest</div>
 
   <div class="param-row">
     <div class="param-group">
@@ -1039,7 +1115,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
       <div class="card">
         <div class="card-head">
           <span class="card-title">Trade Log</span>
-          <span id="haTradeCount" style="font-size:11px;color:#94a3b8"></span>
+          <span id="haTradeCount" style="font-size:11px;color:var(--t3)"></span>
         </div>
         <div class="tbl-wrap" style="max-height:420px">
           <table>
@@ -1103,6 +1179,22 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
 const API = '';
 const show = id => document.getElementById(id)?.classList.remove('hidden');
 const hide = id => document.getElementById(id)?.classList.add('hidden');
+
+// ── Theme-aware chart colours (reads current CSS vars) ────────────────────────
+function _cv(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function chartColors() {
+  return {
+    grid:    _cv('--border-inner') || '#f1f5f9',
+    tick:    _cv('--t3')           || '#94a3b8',
+    t1:      _cv('--t1')           || '#1e293b',
+    t2:      _cv('--t2')           || '#64748b',
+    surface: _cv('--surface')      || '#ffffff',
+    border:  _cv('--border')       || '#e2e8f0',
+    bg:      _cv('--bg-alt')       || '#f8fafc',
+  };
+}
 let _growthChart = null, _alphaChart = null, _ddChart = null;
 let _sortDir = {}, _sortCol = -1;
 let _activeTab   = 'home';
@@ -1230,13 +1322,13 @@ function renderGrowthChart(d) {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderWidth: 1,
-        titleColor: '#1e293b', bodyColor: '#475569',
+        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
+        titleColor: chartColors().t1, bodyColor: chartColors().t2,
         callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}x` },
       }},
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', maxTicksLimit: 12 } },
-        y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8',
+        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 12 } },
+        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick,
           callback: v => v.toFixed(1) + 'x' } },
       },
     },
@@ -1260,13 +1352,13 @@ function renderDDChart(d, ddSeries) {
     options: {
       responsive: true,
       plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderWidth: 1,
-        titleColor: '#1e293b', bodyColor: '#475569',
+        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
+        titleColor: chartColors().t1, bodyColor: chartColors().t2,
         callbacks: { label: c => ` ${(c.raw * 100).toFixed(1)}%` },
       }},
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', maxTicksLimit: 10 } },
-        y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8',
+        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 10 } },
+        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick,
           callback: v => (v * 100).toFixed(0) + '%' } },
       },
     },
@@ -1289,13 +1381,13 @@ function renderAlphaChart(d) {
     options: {
       responsive: true,
       plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderWidth: 1,
-        titleColor: '#1e293b', bodyColor: '#475569',
+        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
+        titleColor: chartColors().t1, bodyColor: chartColors().t2,
         callbacks: { label: c => ` Alpha: ${c.raw >= 0 ? '+' : ''}${c.raw.toFixed(1)}%` },
       }},
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', maxTicksLimit: 10 } },
-        y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', callback: v => v + '%' } },
+        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 10 } },
+        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, callback: v => v + '%' } },
       },
     },
   });
@@ -1303,7 +1395,7 @@ function renderAlphaChart(d) {
 
 // ── Monthly heatmap ───────────────────────────────────────────────────────────
 function heatColor(v) {
-  if (v == null) return 'background:#f1f5f9;color:#e2e8f0';
+  if (v == null) return 'background:var(--border-inner);color:var(--border)';
   const intensity = Math.min(Math.abs(v) / 12, 1);
   if (v > 0)
     return `background:rgba(22,163,74,${(intensity * 0.18 + 0.07).toFixed(2)});color:${intensity > 0.4 ? '#15803d' : '#166534'}`;
@@ -1480,7 +1572,7 @@ function renderPortfolio(d) {
         <td style="font-weight:600">${sym}</td>
         <td>${isNew
           ? '<span class="chip chip-add">NEW</span>'
-          : '<span class="chip chip-hold" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe">CONT</span>'}</td>
+          : '<span class="chip chip-hold" style="background:var(--accent-subtle);color:var(--accent-text);border-color:var(--accent-border)">CONT</span>'}</td>
         <td class="d">—</td>
         <td class="d">—</td>
       </tr>`;
@@ -1491,16 +1583,16 @@ function renderPortfolio(d) {
     const addedHtml   = (d.momentum.added   ||[]).map(s=>`<span class="chip chip-add">+${s}</span>`).join(' ');
     const removedHtml = (d.momentum.removed ||[]).map(s=>`<span class="chip chip-rem">-${s}</span>`).join(' ');
     changes.innerHTML = (addedHtml || removedHtml)
-      ? `<span style="color:#94a3b8;margin-right:6px">Last rebalance:</span>${removedHtml} ${addedHtml}`
-      : '<span style="color:#94a3b8">No changes at last rebalance</span>';
+      ? `<span style="color:var(--t3);margin-right:6px">Last rebalance:</span>${removedHtml} ${addedHtml}`
+      : '<span style="color:var(--t3)">No changes at last rebalance</span>';
   } else {
     show('momPortEmpty'); hide('momPortTable');
   }
 }
 
 function statCard(label, val, color) {
-  return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
-    <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">${label}</div>
+  return `<div style="background:var(--bg-alt);border:1px solid var(--border);border-radius:8px;padding:12px">
+    <div style="font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">${label}</div>
     <div style="font-size:18px;font-weight:700;color:${color}">${val}</div>
   </div>`;
 }
@@ -1519,7 +1611,7 @@ function updateRefreshUI() {
   const rb    = nextRebalanceDate();
   const nextIn = rb.days > 0 ? `${rb.days}d ${rb.hours}h` : `${rb.hours}h`;
   document.getElementById('navUpdated').innerHTML =
-    `<span style="color:#94a3b8">Next rebalance: <strong style="color:#6366f1">${rb.date}</strong> (${nextIn})</span>`;
+    `<span style="color:var(--t3)">Next rebalance: <strong style="color:var(--accent)">${rb.date}</strong> (${nextIn})</span>`;
 }
 
 function scheduleRefresh() {
@@ -1622,10 +1714,10 @@ async function checkKiteStatus() {
     const el = document.getElementById('kiteStatus');
     const btn = document.getElementById('kiteLoginBtn');
     if (s.connected) {
-      el.innerHTML = `<span style="color:#16a34a">● Kite connected</span> — ${s.user_name}`;
+      el.innerHTML = `<span style="color:var(--green)">● Kite connected</span> — ${s.user_name}`;
       btn.classList.add('hidden');
     } else {
-      el.innerHTML = `<span style="color:#dc2626">● Kite not connected</span> — ${s.reason || ''}`;
+      el.innerHTML = `<span style="color:var(--red)">● Kite not connected</span> — ${s.reason || ''}`;
       btn.classList.remove('hidden');
     }
   } catch(_) {}
@@ -1679,8 +1771,8 @@ function renderHA(d) {
     ['Profit Factor', k.profit_factor ?? '—', k.profit_factor >= 1 ? '#16a34a' : '#dc2626'],
     ['Max Drawdown',  `₹${Math.abs(k.max_drawdown ?? 0).toLocaleString('en-IN')}`, '#dc2626'],
   ].map(([label, val, color]) => `
-    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px">
-      <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">${label}</div>
+    <div style="background:var(--bg-alt);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">${label}</div>
       <div style="font-size:20px;font-weight:700;color:${color};line-height:1">${val}</div>
     </div>`).join('');
 
@@ -1698,13 +1790,13 @@ function renderHA(d) {
     options: {
       responsive: true,
       plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderWidth: 1,
-        titleColor: '#1e293b', bodyColor: '#475569',
+        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
+        titleColor: chartColors().t1, bodyColor: chartColors().t2,
         callbacks: { label: c => ` ₹${c.raw.toLocaleString('en-IN')}` },
       }},
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', maxTicksLimit: 12 } },
-        y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8',
+        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 12 } },
+        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick,
           callback: v => '₹' + v.toLocaleString('en-IN') } },
       },
     },
@@ -1726,7 +1818,7 @@ function renderHA(d) {
     const maxAbs  = allVals.length ? Math.max(...allVals.map(Math.abs)) : 1;
 
     const cellStyle = val => {
-      if (val === undefined || val === null) return 'background:#f8fafc;color:#cbd5e1';
+      if (val === undefined || val === null) return 'background:var(--bg-alt);color:var(--border)';
       const intensity = Math.min(Math.abs(val) / maxAbs, 1);
       return val > 0
         ? `background:rgba(22,163,74,${(0.12 + intensity * 0.55).toFixed(2)});color:#14532d`
@@ -1735,9 +1827,9 @@ function renderHA(d) {
 
     let html = `<table style="border-collapse:collapse;width:100%;font-size:12px">
       <thead><tr>
-        <th style="padding:6px 10px;text-align:left;color:#94a3b8;font-weight:600;white-space:nowrap">Year</th>
-        ${MONTHS.map(m => `<th style="padding:6px 8px;text-align:center;color:#94a3b8;font-weight:600;min-width:64px">${m}</th>`).join('')}
-        <th style="padding:6px 10px;text-align:center;color:#94a3b8;font-weight:600">Total</th>
+        <th style="padding:6px 10px;text-align:left;color:var(--t3);font-weight:600;white-space:nowrap">Year</th>
+        ${MONTHS.map(m => `<th style="padding:6px 8px;text-align:center;color:var(--t3);font-weight:600;min-width:64px">${m}</th>`).join('')}
+        <th style="padding:6px 10px;text-align:center;color:var(--t3);font-weight:600">Total</th>
       </tr></thead><tbody>`;
 
     years.forEach(yr => {
@@ -1752,7 +1844,7 @@ function renderHA(d) {
       });
       const ts = cellStyle(yearTotal);
       html += `<tr>
-        <td style="padding:6px 10px;font-weight:700;color:#1e293b;white-space:nowrap">${yr}</td>
+        <td style="padding:6px 10px;font-weight:700;color:var(--t1);white-space:nowrap">${yr}</td>
         ${cells.join('')}
         <td style="padding:6px 10px;text-align:center;border-radius:6px;${ts};font-weight:700">
           ${(yearTotal >= 0 ? '+' : '') + '₹' + Math.round(yearTotal).toLocaleString('en-IN')}
@@ -1768,8 +1860,8 @@ function renderHA(d) {
   const _dtCell = s => {
     const [date, time] = (s || '').split(' ');
     return `<td style="text-align:left;line-height:1.3">
-      <span style="display:block;font-weight:600;color:#1e293b">${date || s}</span>
-      ${time ? `<span style="display:block;font-size:11px;color:#94a3b8">${time}</span>` : ''}
+      <span style="display:block;font-weight:600;color:var(--t1)">${date || s}</span>
+      ${time ? `<span style="display:block;font-size:11px;color:var(--t3)">${time}</span>` : ''}
     </td>`;
   };
   document.getElementById('haTradeBody').innerHTML = d.trades.slice().reverse().map(t => {
@@ -1783,7 +1875,7 @@ function renderHA(d) {
       <td>${t.exit_price?.toLocaleString('en-IN')}</td>
       <td>${t.qty}</td>
       <td class="${cls}"><strong>${t.pnl >= 0 ? '+' : ''}₹${t.pnl?.toLocaleString('en-IN')}</strong></td>
-      <td style="color:#94a3b8">${t.exit_reason}</td>
+      <td style="color:var(--t3)">${t.exit_reason}</td>
     </tr>`;
   }).join('');
 }
@@ -1863,13 +1955,13 @@ function renderMomentum(d) {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderWidth: 1,
-        titleColor: '#1e293b', bodyColor: '#475569',
+        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
+        titleColor: chartColors().t1, bodyColor: chartColors().t2,
         callbacks: { label: c => ` ${c.dataset.label}: ${c.raw.toFixed(2)}x` },
       }},
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', maxTicksLimit: 12 } },
-        y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', callback: v => v.toFixed(1)+'x' } },
+        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 12 } },
+        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, callback: v => v.toFixed(1)+'x' } },
       },
     },
   });
@@ -1900,7 +1992,7 @@ function renderMomHistory(d) {
       </div>
       ${addChips ? `<div style="margin-bottom:3px">${addChips}</div>` : ''}
       ${remChips ? `<div style="margin-bottom:3px">${remChips}</div>` : ''}
-      <div class="reblog-stat" style="font-size:10px;color:#94a3b8">Turnover ${r.turnover_pct.toFixed(0)}% · Nifty ${r.bench_ret_pct >= 0 ? '+' : ''}${r.bench_ret_pct.toFixed(1)}%</div>
+      <div class="reblog-stat" style="font-size:10px;color:var(--t3)">Turnover ${r.turnover_pct.toFixed(0)}% · Nifty ${r.bench_ret_pct >= 0 ? '+' : ''}${r.bench_ret_pct.toFixed(1)}%</div>
     </div>`;
   }).join('');
 
@@ -1913,7 +2005,7 @@ function showMomDetail(idx) {
   const alpha = r.period_ret_pct - (r.bench_ret_pct ?? 0);
   document.getElementById('momHistDetail').innerHTML = `
     <div style="padding:20px">
-      <div style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:12px">${r.date}</div>
+      <div style="font-size:16px;font-weight:700;color:var(--t1);margin-bottom:12px">${r.date}</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
         ${statCard('Return', pct(r.period_ret_pct), r.period_ret_pct >= 0 ? '#16a34a' : '#dc2626')}
         ${statCard('Alpha', pct(alpha,1), alpha >= 0 ? '#16a34a' : '#dc2626')}
@@ -1921,16 +2013,16 @@ function showMomDetail(idx) {
       </div>
       ${r.added.length ? `
         <div style="margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Added (${r.added.length})</div>
+          <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Added (${r.added.length})</div>
           <div class="reblog-chips">${r.added.map(t => `<span class="chip chip-add">${t.replace('.NS','')}</span>`).join('')}</div>
         </div>` : ''}
       ${r.removed.length ? `
         <div style="margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Removed (${r.removed.length})</div>
+          <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Removed (${r.removed.length})</div>
           <div class="reblog-chips">${r.removed.map(t => `<span class="chip chip-rem">${t.replace('.NS','')}</span>`).join('')}</div>
         </div>` : ''}
       <div>
-        <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Holdings (${r.holdings.length})</div>
+        <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Holdings (${r.holdings.length})</div>
         <div class="reblog-chips">${r.holdings.map(t => `<span class="chip chip-hold">${t.replace('.NS','')}</span>`).join('')}</div>
       </div>
     </div>`;
@@ -1974,7 +2066,7 @@ function schedulePulseRefresh() {
   if (!_isMarketHours()) {
     document.getElementById('pulseSignalTime') &&
       (document.getElementById('pulseSignalTime').innerHTML +=
-        ' <span style="color:#94a3b8">(market closed)</span>');
+        ' <span style="color:var(--t3)">(market closed)</span>');
     return;
   }
 
@@ -2025,7 +2117,7 @@ async function loadPulseSignal() {
     document.getElementById('pulseSignalTime').textContent = '';
     document.getElementById('pulseSignalEmpty').style.display = 'block';
     document.getElementById('pulseSignalEmpty').innerHTML =
-      `<div style="color:#dc2626">Error: ${e.message}</div>`;
+      `<div style="color:var(--red)">Error: ${e.message}</div>`;
   }
 }
 
@@ -2057,9 +2149,9 @@ function renderPulseSignal(d) {
     ['HA Low',   d.ha_low],
   ].map(([lbl, val]) => `
     <div>
-      <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;
+      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;
         letter-spacing:.08em;margin-bottom:4px">${lbl}</div>
-      <div style="font-size:14px;font-weight:600;color:#1e293b">${val ?? '—'}</div>
+      <div style="font-size:14px;font-weight:600;color:var(--t1)">${val ?? '—'}</div>
     </div>`).join('');
 
   document.getElementById('pulseSignalEmpty').style.display = 'none';
@@ -2085,10 +2177,10 @@ function renderPulseSignal(d) {
       const pnlCls = p.pnl >= 0 ? '#16a34a' : '#dc2626';
       const qty    = p.quantity;
       return `<div class="trade-order-row" style="justify-content:space-between">
-        <span style="font-weight:700;color:#1e293b">${p.tradingsymbol}</span>
-        <span style="color:#64748b">Qty: <strong>${qty}</strong></span>
-        <span style="color:#64748b">Avg: ₹${p.average_price}</span>
-        <span style="color:#64748b">LTP: ₹${p.last_price}</span>
+        <span style="font-weight:700;color:var(--t1)">${p.tradingsymbol}</span>
+        <span style="color:var(--t2)">Qty: <strong>${qty}</strong></span>
+        <span style="color:var(--t2)">Avg: ₹${p.average_price}</span>
+        <span style="color:var(--t2)">LTP: ₹${p.last_price}</span>
         <span style="font-weight:700;color:${pnlCls}">${p.pnl >= 0 ? '+' : ''}₹${p.pnl.toLocaleString('en-IN')}</span>
         <button class="btn btn-ghost btn-sm" style="color:#dc2626"
           onclick="closePulsePosition('${p.tradingsymbol}', ${Math.abs(qty)})">Close</button>
@@ -2187,12 +2279,12 @@ function _renderOrderRows(orders, containerId) {
   document.getElementById(containerId).innerHTML = orders.map(o => {
     const badge = `<span class="order-badge ${o.action.toLowerCase()}">${o.action}</span>`;
     const amt   = o.estimated_amount ? `₹${o.estimated_amount.toLocaleString('en-IN')}` : '—';
-    const note  = o.note ? `<span style="color:#94a3b8;font-size:11px">${o.note}</span>` : '';
+    const note  = o.note ? `<span style="color:var(--t3);font-size:11px">${o.note}</span>` : '';
     return `<div class="trade-order-row">
       ${badge}
-      <span style="font-weight:700;color:#1e293b;width:120px">${o.symbol}</span>
-      <span style="color:#64748b">Qty: <strong>${o.quantity}</strong></span>
-      <span style="color:#64748b">@ ₹${(o.price||0).toLocaleString('en-IN')}</span>
+      <span style="font-weight:700;color:var(--t1);width:120px">${o.symbol}</span>
+      <span style="color:var(--t2)">Qty: <strong>${o.quantity}</strong></span>
+      <span style="color:var(--t2)">@ ₹${(o.price||0).toLocaleString('en-IN')}</span>
       <span style="margin-left:auto;font-weight:600">${amt}</span>
       ${note}
     </div>`;
@@ -2206,10 +2298,10 @@ function _renderResultRows(results, containerId) {
     const detail = r.order_id ? `Order #${r.order_id}` : (r.error || r.note || '');
     return `<div class="trade-order-row">
       ${badge}
-      <span style="font-weight:700;color:#1e293b;width:120px">${r.symbol}</span>
-      <span style="color:#64748b">Qty: <strong>${r.quantity}</strong></span>
+      <span style="font-weight:700;color:var(--t1);width:120px">${r.symbol}</span>
+      <span style="color:var(--t2)">Qty: <strong>${r.quantity}</strong></span>
       ${status}
-      <span style="font-size:11px;color:#94a3b8;margin-left:auto">${detail}</span>
+      <span style="font-size:11px;color:var(--t3);margin-left:auto">${detail}</span>
     </div>`;
   }).join('');
 }
@@ -2293,9 +2385,9 @@ async function executeOrders(strategy) {
     _renderResultRows(data.results, `${pfx}ResultRows`);
     const s = data.summary;
     document.getElementById(`${pfx}ResultSummary`).innerHTML =
-      `<span style="color:#16a34a">✓ ${s.placed} placed</span> &nbsp;·&nbsp;
-       <span style="color:#dc2626">✗ ${s.failed} failed</span> &nbsp;·&nbsp;
-       <span style="color:#94a3b8">${s.skipped} skipped</span>`;
+      `<span style="color:var(--green)">✓ ${s.placed} placed</span> &nbsp;·&nbsp;
+       <span style="color:var(--red)">✗ ${s.failed} failed</span> &nbsp;·&nbsp;
+       <span style="color:var(--t3)">${s.skipped} skipped</span>`;
 
     document.getElementById(`${pfx}OrderPreview`).classList.add('hidden');
     document.getElementById(`${pfx}OrderResults`).classList.remove('hidden');
@@ -2398,13 +2490,13 @@ function renderMinervini(d) {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: '#fff', borderColor: '#e2e8f0', borderWidth: 1,
-        titleColor: '#1e293b', bodyColor: '#475569',
+        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
+        titleColor: chartColors().t1, bodyColor: chartColors().t2,
         callbacks: { label: c => ` ${c.dataset.label}: ${c.raw.toFixed(2)}x` },
       }},
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', maxTicksLimit: 12 } },
-        y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', callback: v => v.toFixed(1)+'x' } },
+        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 12 } },
+        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, callback: v => v.toFixed(1)+'x' } },
       },
     },
   });
@@ -2717,7 +2809,7 @@ async function init() {
     if (s.connected) {
       const el = document.getElementById('kiteStatus');
       const btn = document.getElementById('kiteLoginBtn');
-      if (el) el.innerHTML = `<span style="color:#16a34a">● Kite connected</span> — ${s.user_name}`;
+      if (el) el.innerHTML = `<span style="color:var(--green)">● Kite connected</span> — ${s.user_name}`;
       if (btn) btn.classList.add('hidden');
     }
   } catch(_) {}
