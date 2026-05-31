@@ -46,7 +46,9 @@ CRITERIA_SHORT = {
 
 # ── SEPA signal computation ───────────────────────────────────────────────────
 
-def compute_sepa(close: pd.DataFrame) -> dict:
+def compute_sepa(close: pd.DataFrame,
+                 high: pd.DataFrame = None,
+                 low:  pd.DataFrame = None) -> dict:
     """Vectorised SEPA criteria across all dates × stocks."""
     stocks = [c for c in close.columns if c != BENCHMARK]
     sc = close[stocks]
@@ -55,8 +57,19 @@ def compute_sepa(close: pd.DataFrame) -> dict:
     sma150 = sc.rolling(150, min_periods=150).mean()
     sma200 = sc.rolling(200, min_periods=200).mean()
 
-    high52w = sc.rolling(252, min_periods=200).max()
-    low52w  = sc.rolling(252, min_periods=200).min()
+    # Use intraday High/Low for 52w range if provided (matches NSE display)
+    # Fall back to close-based range when not available
+    if high is not None and not high.empty:
+        sh = high[stocks] if all(s in high.columns for s in stocks) else sc
+    else:
+        sh = sc
+    if low is not None and not low.empty:
+        sl = low[stocks] if all(s in low.columns for s in stocks) else sc
+    else:
+        sl = sc
+
+    high52w = sh.rolling(252, min_periods=200).max()
+    low52w  = sl.rolling(252, min_periods=200).min()
 
     # RS Rating: cross-sectional percentile of 12-month return (0–99)
     ret12m    = sc / sc.shift(252) - 1
@@ -158,10 +171,10 @@ def run_backtest(
     tickers = st.load_universe()
 
     _prog(2, 5, f"Downloading {len(tickers)} tickers ({years}y daily) …")
-    close, _ = st.download_data(tickers, years=years)
+    close, _, high, low = st.download_data(tickers, years=years, include_hl=True)
 
     _prog(3, 5, "Computing SEPA criteria …")
-    sepa   = compute_sepa(close)
+    sepa   = compute_sepa(close, high, low)
     stocks = [c for c in close.columns if c != BENCHMARK]
 
     # Rebalance dates: first trading day each month after warmup
@@ -351,6 +364,7 @@ def screen_on_date(sepa: dict, close: pd.DataFrame, ref_date: pd.Timestamp,
             return None if pd.isna(v) else v
 
         rs    = _get("rs_rating")
+        # high52w/low52w come from compute_sepa — already uses intraday H/L when available
         h52   = _get("high52w")
         l52   = _get("low52w")
         s50   = _get("sma50")
@@ -359,6 +373,11 @@ def screen_on_date(sepa: dict, close: pd.DataFrame, ref_date: pd.Timestamp,
 
         criteria = {k: bool(_get(k)) for k in CRITERIA_LABELS}
         n_pass = sum(criteria.values())
+
+        # pct_from_52h: positive = % below 52w high (e.g. 5.2 means 5.2% below high)
+        # pct_above_52l: positive = % above 52w low (e.g. 45 means 45% above low)
+        pct_h = round((1 - price / h52) * 100, 1) if h52 and h52 > 0 else None
+        pct_l = round((price / l52 - 1) * 100,  1) if l52 and l52 > 0 else None
 
         rows.append({
             "ticker":        t,
@@ -370,8 +389,8 @@ def screen_on_date(sepa: dict, close: pd.DataFrame, ref_date: pd.Timestamp,
             "sma200":        round(float(s200), 2) if s200 is not None else None,
             "high52w":       round(float(h52), 2) if h52 is not None else None,
             "low52w":        round(float(l52), 2) if l52 is not None else None,
-            "pct_from_52h":  round((price / h52 - 1) * 100, 1) if h52 and h52 > 0 else None,
-            "pct_above_52l": round((price / l52 - 1) * 100, 1) if l52 and l52 > 0 else None,
+            "pct_from_52h":  pct_h,
+            "pct_above_52l": pct_l,
             "criteria":      criteria,
             "passing":       n_pass,
             "sepa_pass":     n_pass == 9,

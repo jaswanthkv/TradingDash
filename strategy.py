@@ -122,9 +122,11 @@ _BATCH_SIZE = 100
 _BATCH_PAUSE = 5
 
 
-def download_data(tickers: list[str], years: int = 5) -> tuple[pd.DataFrame, pd.DataFrame]:
+def download_data(tickers: list[str], years: int = 5,
+                  include_hl: bool = False):
     """
-    Download daily Close + Volume for all tickers + benchmark.
+    Download daily OHLCV for all tickers + benchmark.
+    Returns (close, volume) by default; (close, volume, high, low) when include_hl=True.
     Batched to avoid yfinance rate limiting; benchmark fetched first.
     """
     warmup = int(years * 365) + 430
@@ -133,14 +135,22 @@ def download_data(tickers: list[str], years: int = 5) -> tuple[pd.DataFrame, pd.
     def _fetch(syms):
         raw = yf.download(syms, start=start, auto_adjust=True, progress=False, threads=True)
         if isinstance(raw.columns, pd.MultiIndex):
-            return raw["Close"].copy(), raw["Volume"].copy()
-        return raw[["Close"]].copy(), raw[["Volume"]].copy()
+            c = raw["Close"].copy()
+            v = raw["Volume"].copy()
+            h = raw["High"].copy()  if "High"  in raw.columns.get_level_values(0) else pd.DataFrame()
+            l = raw["Low"].copy()   if "Low"   in raw.columns.get_level_values(0) else pd.DataFrame()
+        else:
+            c = raw[["Close"]].copy()
+            v = raw[["Volume"]].copy()
+            h = raw[["High"]].copy()  if "High"  in raw.columns else pd.DataFrame()
+            l = raw[["Low"]].copy()   if "Low"   in raw.columns else pd.DataFrame()
+        return c, v, h, l
 
     # Benchmark first, retry once if rate-limited
-    close_bench, vol_bench = None, None
+    close_bench, vol_bench, high_bench, low_bench = None, None, pd.DataFrame(), pd.DataFrame()
     for attempt in range(2):
         try:
-            close_bench, vol_bench = _fetch([BENCHMARK])
+            close_bench, vol_bench, high_bench, low_bench = _fetch([BENCHMARK])
             if not close_bench.empty:
                 break
         except Exception:
@@ -152,15 +162,19 @@ def download_data(tickers: list[str], years: int = 5) -> tuple[pd.DataFrame, pd.
     batches = [tickers[i:i + _BATCH_SIZE] for i in range(0, len(tickers), _BATCH_SIZE)]
     close_frames  = [close_bench]
     volume_frames = [vol_bench]
+    high_frames   = [high_bench]
+    low_frames    = [low_bench]
     for idx, batch in enumerate(batches):
         if idx > 0:
             time.sleep(_BATCH_PAUSE)
         try:
-            c, v = _fetch(batch)
+            c, v, h, l = _fetch(batch)
             close_frames.append(c)
             volume_frames.append(v)
-        except Exception as e:
-            pass  # skip failed batches, they'll be dropped by NaN filter
+            high_frames.append(h)
+            low_frames.append(l)
+        except Exception:
+            pass  # skip failed batches
 
     close  = pd.concat(close_frames,  axis=1)
     volume = pd.concat(volume_frames, axis=1)
@@ -171,7 +185,6 @@ def download_data(tickers: list[str], years: int = 5) -> tuple[pd.DataFrame, pd.
     volume.index = pd.to_datetime(volume.index).tz_localize(None)
 
     # Filter on recent activity (last ~1 year), not total download length.
-    # This keeps the eligible universe consistent whether you download 3y or 10y.
     recent_win = min(252, len(close))
     recent_ok  = close.iloc[-recent_win:].notna().sum() >= (recent_win // 2)
     keep_bench = close[[BENCHMARK]].copy() if BENCHMARK in close.columns else None
@@ -179,7 +192,19 @@ def download_data(tickers: list[str], years: int = 5) -> tuple[pd.DataFrame, pd.
     if keep_bench is not None and BENCHMARK not in close.columns:
         close[BENCHMARK] = keep_bench[BENCHMARK]
     volume = volume.reindex(columns=close.columns).fillna(0)
-    return close, volume
+
+    if not include_hl:
+        return close, volume
+
+    high = pd.concat(high_frames, axis=1)
+    low  = pd.concat(low_frames,  axis=1)
+    high = high.loc[:, ~high.columns.duplicated()]
+    low  = low.loc[:,  ~low.columns.duplicated()]
+    high.index = pd.to_datetime(high.index).tz_localize(None)
+    low.index  = pd.to_datetime(low.index).tz_localize(None)
+    high = high.reindex(columns=close.columns)
+    low  = low.reindex(columns=close.columns)
+    return close, volume, high, low
 
 
 # ── Factor computation (fully vectorised) ────────────────────────────────────
