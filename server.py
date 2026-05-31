@@ -202,7 +202,7 @@ class MinerviniParams(BaseModel):
 async def minervini_backtest_run(params: MinerviniParams):
     global _min_bt_running
     if _min_bt_running:
-        raise HTTPException(409, "Minervini backtest already running")
+        raise HTTPException(409, "Trend Breakout backtest already running")
     import minervini as mv
 
     def _run():
@@ -231,7 +231,7 @@ async def minervini_backtest_run(params: MinerviniParams):
 @app.get("/api/minervini/backtest/result")
 def minervini_backtest_result():
     if not _min_bt_cache:
-        raise HTTPException(404, "No Minervini backtest result — run one first")
+        raise HTTPException(404, "No Trend Breakout backtest result — run one first")
     return _min_bt_cache
 
 
@@ -819,7 +819,7 @@ body{{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1
   </div>
   <div class="disclaimer">
     All returns are from walk-forward backtests on NSE-listed equities. Past performance does not guarantee future results.
-    Transaction costs included. Returns shown in INR. Universe: NSE Microcap 250.
+    Transaction costs included. Returns shown in INR.
   </div>
 </div>
 </body>

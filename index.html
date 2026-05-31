@@ -395,9 +395,9 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
     <div class="s-card" onclick="goToTab('momentum')">
       <div class="s-card-icon">📈</div>
       <div class="s-card-name">Multi-Factor Momentum</div>
-      <div class="s-card-desc">A cross-sectional ranking engine scoring every stock in the NSE Microcap universe across seven quantitative factors — price momentum, relative strength, trend alignment, Sharpe ratio, and volume expansion. Portfolio rebalances monthly into the top 20 ranked names.</div>
+      <div class="s-card-desc">A cross-sectional ranking engine scoring every stock in the NSE equity universe across seven quantitative factors — price momentum, relative strength, trend alignment, Sharpe ratio, and volume expansion. Portfolio rebalances monthly into the top 20 ranked names.</div>
       <div class="s-card-tags">
-        <span class="s-tag">NSE Microcap</span>
+        <span class="s-tag">NSE Equities</span>
         <span class="s-tag">Monthly Rebalance</span>
         <span class="s-tag">Long-Only</span>
       </div>
@@ -425,7 +425,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
       <div class="s-card-name">Trend Breakout</div>
       <div class="s-card-desc">A rigorous 9-criteria price-structure filter that identifies stocks entering a confirmed Stage 2 uptrend — defined by moving average alignment, 52-week range position, and upward slope. Holdings are ranked by Relative Strength rating against the full NSE universe.</div>
       <div class="s-card-tags">
-        <span class="s-tag">NSE Microcap</span>
+        <span class="s-tag">NSE Equities</span>
         <span class="s-tag">Monthly Rebalance</span>
         <span class="s-tag">Trend-Following</span>
       </div>
@@ -472,7 +472,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   <div id="portError" class="empty hidden">
     <div class="empty-icon">⚠️</div>
     <div class="empty-title" id="portErrorMsg">Something went wrong</div>
-    <div class="empty-sub">Run Minervini and Momentum Backtest first, then refresh.</div>
+    <div class="empty-sub">Run Trend Breakout and Momentum backtest first, then refresh.</div>
   </div>
 
   <!-- content -->
@@ -531,11 +531,11 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
         <!-- Minervini SEPA card -->
         <div class="card">
           <div class="card-head">
-            <span class="card-title">🏆 Minervini SEPA</span>
+            <span class="card-title">🏆 Trend Breakout</span>
             <span id="minPortAsOf" class="d" style="font-size:11px">—</span>
           </div>
           <div id="minPortEmpty" class="empty" style="padding:24px">
-            <div class="empty-title" style="font-size:13px">No Minervini backtest yet</div>
+            <div class="empty-title" style="font-size:13px">No Trend Breakout backtest yet</div>
             <div class="empty-sub">Go to Trend Breakout tab and run backtest first.</div>
           </div>
           <div id="minPortTable" class="hidden">
@@ -765,7 +765,7 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
       <div class="empty">
         <div class="empty-icon">📐</div>
         <div class="empty-title">No backtest result yet</div>
-        <div class="empty-sub">Runs a walk-forward SEPA strategy — stocks passing all 9 Minervini criteria,<br>ranked by RS Rating. First run ~60–90s while data downloads.</div>
+        <div class="empty-sub">Runs a walk-forward strategy — stocks passing all 9 price-structure criteria,<br>ranked by Relative Strength rating. First run ~60–90s while data downloads.</div>
       </div>
     </div>
 
