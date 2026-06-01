@@ -374,27 +374,6 @@ html{scroll-behavior:smooth}
 .day-bar-val{font-size:15px;font-weight:800;color:var(--t1)}
 .day-bar-diff{font-size:11px;color:var(--t3)}
 
-/* ── IPO Screen ── */
-.pill{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;
-  font-size:11px;font-weight:600;color:var(--t2);cursor:pointer;transition:all .15s}
-.pill:hover{border-color:var(--accent);color:var(--accent)}
-.pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.chip{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;
-  background:var(--bg-alt);color:var(--t2);border:1px solid var(--border)}
-.chip-green{background:#dcfce7;color:#16a34a;border-color:#bbf7d0}
-.chip-amber{background:#fef9c3;color:#ca8a04;border-color:#fde68a}
-[data-theme="dark"] .chip-green{background:#14532d;color:#4ade80;border-color:#166534}
-[data-theme="dark"] .chip-amber{background:#422006;color:#fbbf24;border-color:#92400e}
-.ipo-th{text-align:right;padding:10px 8px;font-size:10px;font-weight:700;color:var(--t3);
-  text-transform:uppercase;letter-spacing:.07em;white-space:nowrap;background:var(--bg-alt)}
-.ipo-th:first-child{text-align:left;padding-left:16px}
-.ipo-th:last-child{text-align:left;padding-right:16px}
-.ipo-td{padding:10px 8px;font-size:12px;color:var(--t2);text-align:right;
-  border-bottom:1px solid var(--border-inner)}
-.ipo-td:first-child{text-align:left;padding-left:16px;font-weight:700;font-size:13px;color:var(--t1)}
-.ipo-td:last-child{text-align:left;padding-right:16px}
-.ipo-tr:hover{background:var(--bg-alt)}
-.ipo-badge{padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -479,7 +458,6 @@ html{scroll-behavior:smooth}
   <button class="tab" onclick="switchTab('minervini',this)">Trend Breakout</button>
   <button class="tab" onclick="switchTab('ha',this)">Pulse</button>
   <button class="tab" onclick="switchTab('report',this)">Report</button>
-  <button class="tab" onclick="switchTab('ipo',this)">IPO Screen</button>
 </div>
 
 <!-- ════════════════════ HOME TAB ════════════════════ -->
@@ -533,19 +511,6 @@ html{scroll-behavior:smooth}
       </div>
       <div class="s-sparkline" id="spark-min"></div>
       <button class="s-card-cta">View Strategy →</button>
-    </div>
-
-    <!-- IPO Screen card -->
-    <div class="s-card" onclick="goToTab('ipo')">
-      <div class="s-card-icon">🔭</div>
-      <div class="s-card-name">IPO Breakout Screen</div>
-      <div class="s-card-desc">Scans all NSE stocks that listed in the last 18 months for post-IPO base formations and breakout setups. Ranks candidates by proximity to their pivot point and volume confirmation — the earliest stage of a potential Stage 2 uptrend.</div>
-      <div class="s-card-tags">
-        <span class="s-tag">Recent Listings</span>
-        <span class="s-tag">Daily Screen</span>
-        <span class="s-tag">Breakout</span>
-      </div>
-      <button class="s-card-cta">Run Screen →</button>
     </div>
 
   </div>
@@ -1263,76 +1228,6 @@ html{scroll-behavior:smooth}
   </div>
 </div>
 
-<!-- ════════════════════ IPO SCREEN TAB ════════════════════ -->
-<div class="tab-pane" id="tab-ipo">
-
-  <!-- Header -->
-  <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:16px 20px;
-    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-    <div>
-      <div style="font-size:16px;font-weight:800;color:var(--t1);letter-spacing:-.3px">IPO Breakout Screen</div>
-      <div style="font-size:11px;color:var(--t3);margin-top:2px">NSE stocks listed in the last 18 months — base formations &amp; breakout setups</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px">
-      <span id="ipoProgress" class="hidden" style="font-size:11px;color:var(--t3)"></span>
-      <button class="btn btn-primary btn-sm" onclick="runIPOScreen()" id="ipoRunBtn">Run Screen</button>
-    </div>
-  </div>
-
-  <!-- Summary chips (hidden until first run) -->
-  <div id="ipoSummary" class="hidden" style="padding:10px 20px;background:var(--bg-alt);
-    border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-    <span id="ipoChipTotal" class="chip"></span>
-    <span id="ipoChipBO"    class="chip chip-green"></span>
-    <span id="ipoChipNP"    class="chip chip-amber"></span>
-    <span id="ipoChipCon"   class="chip"></span>
-    <span style="margin-left:auto;font-size:11px;color:var(--t3)" id="ipoLastRun"></span>
-  </div>
-
-  <!-- Filter pills -->
-  <div id="ipoFilters" class="hidden" style="padding:10px 20px;display:flex;gap:6px;flex-wrap:wrap;
-    border-bottom:1px solid var(--border)">
-    <button class="pill active" onclick="filterIPO('all',this)">All</button>
-    <button class="pill"        onclick="filterIPO('breaking',this)">Breaking Out</button>
-    <button class="pill"        onclick="filterIPO('pivot',this)">Near Pivot</button>
-    <button class="pill"        onclick="filterIPO('above',this)">Above Pivot</button>
-    <button class="pill"        onclick="filterIPO('cons',this)">Consolidating</button>
-    <button class="pill"        onclick="filterIPO('broken',this)">Broken Down</button>
-  </div>
-
-  <!-- Empty state -->
-  <div id="ipoEmpty" style="text-align:center;padding:80px 20px;color:var(--t3)">
-    <div style="font-size:40px;margin-bottom:14px">🔭</div>
-    <div style="font-size:15px;font-weight:700;color:var(--t1);margin-bottom:6px">IPO Breakout Scanner</div>
-    <div style="font-size:12px;max-width:360px;margin:0 auto 20px;line-height:1.6">
-      Scans all NSE stocks listed in the last 18 months for post-IPO base formations and breakout setups.</div>
-    <button class="btn btn-primary" onclick="runIPOScreen()">Run Screen Now</button>
-  </div>
-
-  <!-- Results table -->
-  <div id="ipoTableWrap" class="hidden" style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse">
-      <thead>
-        <tr>
-          <th class="ipo-th" style="text-align:left;padding-left:16px">Symbol</th>
-          <th class="ipo-th">Listed</th>
-          <th class="ipo-th">Days</th>
-          <th class="ipo-th">List ₹</th>
-          <th class="ipo-th">Price</th>
-          <th class="ipo-th">From List</th>
-          <th class="ipo-th">Pivot</th>
-          <th class="ipo-th">From Pivot</th>
-          <th class="ipo-th">Vol Ratio</th>
-          <th class="ipo-th">RS 3M</th>
-          <th class="ipo-th" style="text-align:left;padding-right:16px">Status</th>
-        </tr>
-      </thead>
-      <tbody id="ipoTbody"></tbody>
-    </table>
-  </div>
-
-</div>
-
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 const API = '';
@@ -1374,7 +1269,7 @@ function switchTab(name, el) {
   history.replaceState(null, '', '#' + name);
 
   // KPI bar: hide on home and portfolio (portfolio has its own KPI section)
-  document.getElementById('kpiBar').style.display = (name === 'home' || name === 'portfolio' || name === 'ipo' || name === 'report') ? 'none' : '';
+  document.getElementById('kpiBar').style.display = (name === 'home' || name === 'portfolio' || name === 'report') ? 'none' : '';
 
   if (name === 'portfolio') {
     loadPortfolio();
@@ -3208,152 +3103,12 @@ function drawSparkline(containerId, values) {
   </svg>`;
 }
 
-// ── IPO Screen ────────────────────────────────────────────────────────────────
-
-let _ipoData     = null;
-let _ipoFilter   = 'all';
-let _ipoPollTimer = null;
-
-const IPO_STATUS_LABEL = {
-  breaking: 'Breaking Out',
-  pivot:    'Near Pivot',
-  above:    'Above Pivot',
-  cons:     'Consolidating',
-  broken:   'Broken Down',
-};
-
-function _ipoBadge(status) {
-  const cfg = {
-    'Breaking Out':  'background:#dcfce7;color:#16a34a',
-    'Near Pivot':    'background:#fef9c3;color:#ca8a04',
-    'Above Pivot':   'background:#ede9fe;color:#7c3aed',
-    'Consolidating': 'background:var(--bg-alt);color:var(--t3)',
-    'Broken Down':   'background:#fee2e2;color:#dc2626',
-  };
-  const s = cfg[status] || 'background:var(--bg-alt);color:var(--t3)';
-  return `<span class="ipo-badge" style="${s}">${status}</span>`;
-}
-
-function _ipoNum(v, decimals = 2) {
-  if (v == null) return `<span style="color:var(--t3)">—</span>`;
-  return (+v).toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-}
-
-function _ipoSign(v, suffix = '%') {
-  if (v == null) return `<span style="color:var(--t3)">—</span>`;
-  const n = +v;
-  const s = n.toFixed(1) + suffix;
-  if (n > 0) return `<span style="color:var(--green);font-weight:600">+${s}</span>`;
-  if (n < 0) return `<span style="color:var(--red);font-weight:600">${s}</span>`;
-  return `<span style="color:var(--t3)">${s}</span>`;
-}
-
-async function runIPOScreen() {
-  const btn = document.getElementById('ipoRunBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
-  show('ipoProgress');
-  document.getElementById('ipoProgress').textContent = 'Starting…';
-  clearInterval(_ipoPollTimer);
-  try {
-    await fetch(API + '/api/ipo-screen/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ years: 2 }),
-    });
-    _ipoPollTimer = setInterval(_pollIPO, 2500);
-  } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Run Screen'; }
-    document.getElementById('ipoProgress').textContent = 'Failed to start.';
-  }
-}
-
-async function _pollIPO() {
-  try {
-    const s = await fetch(API + '/api/ipo-screen/status').then(r => r.json());
-    const prog = document.getElementById('ipoProgress');
-    if (prog) prog.textContent = s.progress || '';
-    if (!s.running) {
-      clearInterval(_ipoPollTimer);
-      const btn = document.getElementById('ipoRunBtn');
-      if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
-      if (s.has_result) {
-        const data = await fetch(API + '/api/ipo-screen/result').then(r => r.json());
-        if (data && data.results) renderIPOScreen(data);
-      }
-    }
-  } catch (_) { clearInterval(_ipoPollTimer); }
-}
-
-function filterIPO(key, el) {
-  _ipoFilter = key;
-  document.querySelectorAll('#ipoFilters .pill').forEach(p => p.classList.remove('active'));
-  if (el) el.classList.add('active');
-  if (_ipoData) _renderIPORows(_ipoData.results || []);
-}
-
-function _renderIPORows(results) {
-  const target   = _ipoFilter === 'all' ? null : IPO_STATUS_LABEL[_ipoFilter];
-  const filtered = target ? results.filter(r => r.status === target) : results;
-  const tbody    = document.getElementById('ipoTbody');
-  if (!tbody) return;
-
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:48px;color:var(--t3)">No stocks match this filter.</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = filtered.map(r => {
-    const volCell = r.vol_ratio == null
-      ? `<span style="color:var(--t3)">—</span>`
-      : r.vol_ratio >= 1.5
-        ? `<span style="color:var(--green);font-weight:700">${r.vol_ratio}×</span>`
-        : `<span style="color:var(--t2)">${r.vol_ratio}×</span>`;
-
-    return `<tr class="ipo-tr">
-      <td class="ipo-td" style="text-align:left;padding-left:16px;font-weight:700;font-size:13px;color:var(--t1)">${r.symbol}</td>
-      <td class="ipo-td" style="color:var(--t3);font-size:11px">${r.listing_date}</td>
-      <td class="ipo-td">${r.days_listed}</td>
-      <td class="ipo-td">₹${_ipoNum(r.listing_price)}</td>
-      <td class="ipo-td" style="font-weight:600;color:var(--t1)">₹${_ipoNum(r.current_price)}</td>
-      <td class="ipo-td">${_ipoSign(r.return_vs_listing)}</td>
-      <td class="ipo-td" style="color:var(--t2)">₹${_ipoNum(r.base_high)}</td>
-      <td class="ipo-td" style="font-weight:600">${_ipoSign(r.pct_from_pivot)}</td>
-      <td class="ipo-td">${volCell}</td>
-      <td class="ipo-td">${_ipoSign(r.rs_3m)}</td>
-      <td class="ipo-td" style="text-align:left;padding-right:16px">${_ipoBadge(r.status)}</td>
-    </tr>`;
-  }).join('');
-}
-
-function renderIPOScreen(data) {
-  _ipoData = data;
-  const r  = data.results || [];
-
-  const bo  = r.filter(x => x.status === 'Breaking Out').length;
-  const np  = r.filter(x => x.status === 'Near Pivot').length;
-  const con = r.filter(x => x.status === 'Consolidating' || x.status === 'Above Pivot').length;
-
-  document.getElementById('ipoChipTotal').textContent = `${data.total_scanned} scanned`;
-  document.getElementById('ipoChipBO').textContent    = `${bo} breaking out`;
-  document.getElementById('ipoChipNP').textContent    = `${np} near pivot`;
-  document.getElementById('ipoChipCon').textContent   = `${con} in base`;
-  document.getElementById('ipoLastRun').textContent   = `As of ${data.as_of}`;
-
-  document.getElementById('ipoEmpty').style.display = 'none';
-  hide('ipoProgress');
-  show('ipoSummary');
-  show('ipoFilters');
-  show('ipoTableWrap');
-
-  _renderIPORows(r);
-}
-
 // ── Init ──────────────────────────────────────────────────────────────────────
 function round4(v) { return Math.round(v * 10000) / 10000; }
 
 async function init() {
   initDark();
-  const validTabs = ['home', 'portfolio', 'momentum', 'minervini', 'ha', 'report', 'ipo'];
+  const validTabs = ['home', 'portfolio', 'momentum', 'minervini', 'ha', 'report'];
   const hashTab = window.location.hash.slice(1);
   if (hashTab && validTabs.includes(hashTab)) goToTab(hashTab);
 
@@ -3374,11 +3129,6 @@ async function init() {
   try {
     const res = await fetch(API + '/api/minervini/backtest/result');
     if (res.ok) renderMinervini(await res.json());
-  } catch(_) {}
-
-  try {
-    const res = await fetch(API + '/api/ipo-screen/result');
-    if (res.ok) { const d = await res.json(); if (d.results) renderIPOScreen(d); }
   } catch(_) {}
 
   // Load auto-execute status silently
