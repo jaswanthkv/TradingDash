@@ -2979,31 +2979,27 @@ function renderScreen() {
 // ── Monthly Report ────────────────────────────────────────────────────────────
 function renderReport() {
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const today  = new Date();
   const yr     = today.getFullYear();
 
-  // Returns [value, monthLabel, ytd] — finds the latest non-null month in the current year
-  // Bug fix: use `v != null` not `v` so that 0.0 is not treated as missing
-  function latestMonth(rows) {
-    if (!rows || !rows.length) return [null, null, null];
-    const yrRow = rows.slice().reverse().find(r => r.year === yr) || rows[rows.length - 1];
-    let cur = null, label = null;
-    for (let i = MONTHS.length - 1; i >= 0; i--) {
-      if (yrRow[MONTHS[i]] != null) {
-        cur   = yrRow[MONTHS[i]];
-        label = MONTHS[i] + ' ' + (yrRow.year || yr);
-        break;
-      }
-    }
-    return [cur, label, yrRow.Annual ?? null];
+  // Current calendar month — used as the shared period label for all strategies
+  const curMonthIdx  = today.getMonth();
+  const curMonthName = MONTHS[curMonthIdx];
+  const curMonthLabel = curMonthName + ' ' + yr;
+
+  // Get the value for a specific month+year from a monthly_returns array
+  function monthVal(rows, monthName, year) {
+    if (!rows) return null;
+    const row = rows.find(r => r.year === year);
+    if (!row) return null;
+    return row[monthName] !== undefined ? row[monthName] : null;
   }
 
-  // Bug fix: never use `+x || null` — 0 is falsy and would become null
-  function _parse(x) {
-    if (x === 'null' || x === 'undefined') return null;
-    const n = +x;
-    return isNaN(n) ? x : n;
+  // YTD from the Annual field of the current year row
+  function ytdVal(rows, year) {
+    if (!rows) return null;
+    const row = rows.find(r => r.year === year);
+    return row ? (row.Annual ?? null) : null;
   }
 
   function pctStr(v) {
@@ -3025,43 +3021,76 @@ function renderReport() {
 
   hide('reportEmpty'); show('reportCards'); show('reportFooter');
 
-  const month = today.toLocaleString('default', { month: 'long', year: 'numeric' });
-  document.getElementById('reportTitle').textContent = month + ' — Performance Report';
+  document.getElementById('reportTitle').textContent =
+    today.toLocaleString('default', { month: 'long', year: 'numeric' }) + ' — Performance Report';
 
-  document.getElementById('reportCards').innerHTML = available.map(s => {
+  // Stale data warning: any strategy missing current-month data
+  const staleStrategies = available.filter(s => {
+    const v = monthVal(s.data.monthly_returns, curMonthName, yr);
+    return v == null;
+  });
+
+  const warningHtml = staleStrategies.length ? `
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;margin-bottom:16px;
+      background:var(--bg-alt);border:1px solid var(--border);border-radius:10px;
+      border-left:3px solid #f59e0b">
+      <span style="font-size:16px;flex-shrink:0">⚠️</span>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:3px">Stale backtest data</div>
+        <div style="font-size:11px;color:var(--t2)">
+          <strong>${staleStrategies.map(s => s.label).join(', ')}</strong>
+          ${staleStrategies.length > 1 ? 'don\'t have' : 'doesn\'t have'} ${curMonthLabel} data yet.
+          Re-run ${staleStrategies.length > 1 ? 'those backtests' : 'that backtest'} to see consistent results.
+        </div>
+      </div>
+    </div>` : '';
+
+  const cardsHtml = available.map(s => {
     const kpi  = s.data.strategy_kpi  || {};
     const bkpi = s.data.benchmark_kpi || {};
-    const [cur,  curLabel, ytd]  = latestMonth(s.data.monthly_returns);
-    const [bcur, ,         bytd] = latestMonth(s.data.monthly_bench);
+    const runAt = (s.data.run_at || '').slice(0, 10);
+
+    // Always show current calendar month — null if backtest hasn't reached it
+    const cur  = monthVal(s.data.monthly_returns, curMonthName, yr);
+    const bcur = monthVal(s.data.monthly_bench,   curMonthName, yr);
+    const ytd  = ytdVal(s.data.monthly_returns, yr);
+    const bytd = ytdVal(s.data.monthly_bench,   yr);
+
     const alphaCur  = (cur  != null && bcur  != null) ? +(cur  - bcur ).toFixed(1) : null;
     const alphaYtd  = (ytd  != null && bytd  != null) ? +(ytd  - bytd ).toFixed(1) : null;
-    const alphaCagr = (kpi.cagr_pct != null && bkpi.cagr_pct != null) ? +(kpi.cagr_pct - bkpi.cagr_pct).toFixed(1) : null;
-    const monthLabel = curLabel || 'Last Month';
+    const alphaCagr = (kpi.cagr_pct != null && bkpi.cagr_pct != null)
+                      ? +(kpi.cagr_pct - bkpi.cagr_pct).toFixed(1) : null;
+
+    const staleNote = cur == null
+      ? `<span style="font-size:10px;color:#f59e0b;font-weight:600;margin-left:8px">⚠ backtest not updated</span>`
+      : '';
 
     return `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
       overflow:hidden;border-left:4px solid ${s.color}">
       <div style="padding:18px 22px 14px">
-        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;
-          color:${s.color};margin-bottom:14px">${s.label}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;
+            color:${s.color}">${s.label}${staleNote}</div>
+          ${runAt ? `<div style="font-size:10px;color:var(--t3)">run ${runAt}</div>` : ''}
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;margin-bottom:16px">
           ${[
-            [monthLabel,       cur,          bcur,          alphaCur],
+            [curMonthLabel,    cur,          bcur,          alphaCur],
             ['YTD ' + yr,      ytd,          bytd,          alphaYtd],
             ['CAGR (backtest)', kpi.cagr_pct, bkpi.cagr_pct, alphaCagr],
-          ].map(([name, val, bval, alpha], i) => {
-              return `${i > 0 ? '<div style="background:var(--border);margin:0 12px"></div>' : ''}
-              <div style="padding:0 4px">
-                <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;
-                  letter-spacing:.07em;margin-bottom:5px">${name}</div>
-                <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:3px;
-                  color:${clr(val)}">${pctStr(val)}</div>
-                <div style="font-size:10px;color:var(--t3)">
-                  Nifty 500 ${pctStr(bval)} &nbsp;·&nbsp;
-                  <span style="color:${clr(alpha)}">α ${pctStr(alpha)}</span>
-                </div>
-              </div>`;
-            }).join('')}
+          ].map(([name, val, bval, alpha], i) => `
+            ${i > 0 ? '<div style="background:var(--border);margin:0 12px"></div>' : ''}
+            <div style="padding:0 4px">
+              <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;
+                letter-spacing:.07em;margin-bottom:5px">${name}</div>
+              <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:3px;
+                color:${clr(val)}">${pctStr(val)}</div>
+              <div style="font-size:10px;color:var(--t3)">
+                Nifty 500 ${pctStr(bval)} &nbsp;·&nbsp;
+                <span style="color:${clr(alpha)}">α ${pctStr(alpha)}</span>
+              </div>
+            </div>`).join('')}
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);
           padding-top:14px;gap:8px;text-align:center">
@@ -3073,12 +3102,15 @@ function renderReport() {
           ].map(([name, val]) => `
             <div>
               <div style="font-size:16px;font-weight:700;color:var(--t1);margin-bottom:2px">${val}</div>
-              <div style="font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.06em">${name}</div>
+              <div style="font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;
+                letter-spacing:.06em">${name}</div>
             </div>`).join('')}
         </div>
       </div>
     </div>`;
   }).join('');
+
+  document.getElementById('reportCards').innerHTML = warningHtml + cardsHtml;
 
   const runDates = available.map(s => s.data.run_at).filter(Boolean).sort();
   document.getElementById('reportFooterMeta').textContent =
