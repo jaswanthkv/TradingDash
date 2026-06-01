@@ -1067,7 +1067,7 @@ html{scroll-behavior:smooth}
           <span id="pulseTradeStatus" style="font-size:11px;color:var(--t3)"></span>
         </div>
         <div class="trade-warning">
-          ⚠️ Sells a NIFTY monthly option on Kite (NRML). Only during market hours. Margin will be blocked.
+          ⚠️ Sells the NIFTY ATM weekly option on Kite (NRML product). Only during market hours. Margin will be blocked.
         </div>
       </div>
 
@@ -1076,6 +1076,47 @@ html{scroll-behavior:smooth}
         <div style="padding:10px 16px;font-size:11px;font-weight:700;color:var(--t3);
           text-transform:uppercase;letter-spacing:.08em">Open Positions</div>
         <div id="pulsePositionRows"></div>
+      </div>
+
+      <!-- Auto-execute panel -->
+      <div style="border-top:1px solid var(--border-inner);padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:3px">
+              Auto-Execute
+            </div>
+            <div style="font-size:11px;color:var(--t3);max-width:420px">
+              When enabled, the system checks signal 3 min after every 30-min candle close
+              (market hours only). On signal flip: closes current position → sells new ATM option.
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="param-group">
+              <label style="font-size:10px">Lots</label>
+              <input id="autoLotsInput" type="number" value="1" min="1" max="10" style="width:50px"
+                     oninput="updateAutoLots()"/>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+              <div style="position:relative;width:44px;height:24px" onclick="toggleAutoExecute()">
+                <input type="checkbox" id="autoToggle" style="opacity:0;width:0;height:0;position:absolute">
+                <span id="autoTrack" style="position:absolute;inset:0;border-radius:24px;
+                  background:var(--border);transition:background .2s;cursor:pointer"></span>
+                <span id="autoThumb" style="position:absolute;top:3px;left:3px;width:18px;height:18px;
+                  border-radius:50%;background:#fff;transition:transform .2s;
+                  box-shadow:0 1px 3px rgba(0,0,0,.3)"></span>
+              </div>
+              <span id="autoLabel" style="font-size:12px;font-weight:600;color:var(--t2)">Off</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Auto-execute log -->
+        <div id="autoLogWrap" class="hidden" style="margin-top:14px;border-top:1px solid var(--border-inner);padding-top:12px">
+          <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;
+            letter-spacing:.08em;margin-bottom:8px">Execution Log</div>
+          <div id="autoLogRows" style="display:flex;flex-direction:column;gap:4px;
+            max-height:200px;overflow-y:auto;font-size:11px"></div>
+        </div>
       </div>
 
       <div id="pulseSignalEmpty" style="padding:32px;text-align:center;color:var(--t3);font-size:12px">
@@ -2358,6 +2399,122 @@ async function closePulsePosition(tradingsymbol, qty) {
   }
 }
 
+// ── Pulse auto-execute ────────────────────────────────────────────────────────
+
+let _autoEnabled = false;
+let _autoLogPollTimer = null;
+
+function _setAutoUI(enabled) {
+  _autoEnabled = enabled;
+  const track = document.getElementById('autoTrack');
+  const thumb = document.getElementById('autoThumb');
+  const label = document.getElementById('autoLabel');
+  if (!track) return;
+  if (enabled) {
+    track.style.background = 'var(--accent)';
+    thumb.style.transform  = 'translateX(20px)';
+    label.textContent = 'On';
+    label.style.color = 'var(--accent)';
+    show('autoLogWrap');
+    if (!_autoLogPollTimer) _autoLogPollTimer = setInterval(loadAutoLog, 15000);
+  } else {
+    track.style.background = 'var(--border)';
+    thumb.style.transform  = 'none';
+    label.textContent = 'Off';
+    label.style.color = 'var(--t2)';
+    clearInterval(_autoLogPollTimer);
+    _autoLogPollTimer = null;
+  }
+}
+
+function updateAutoLots() { /* lots read on toggle */ }
+
+async function toggleAutoExecute() {
+  const lots    = +document.getElementById('autoLotsInput').value || 1;
+  const enabled = !_autoEnabled;
+
+  if (enabled) {
+    const ok = confirm(
+      `Enable Auto-Execute?\n\n` +
+      `The system will:\n` +
+      `  • Check the NIFTY HA signal every 30 minutes during market hours\n` +
+      `  • On signal flip: close existing NIFTY option position\n` +
+      `  • Sell ${lots} lot of the new ATM weekly option via Kite (NRML)\n\n` +
+      `Make sure you have sufficient margin. Orders are placed automatically — no confirmation.\n\nProceed?`
+    );
+    if (!ok) return;
+  }
+
+  try {
+    const res = await fetch(API + '/api/pulse/auto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled, lots }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    _setAutoUI(data.enabled);
+    if (data.enabled) loadAutoLog();
+  } catch(e) {
+    alert('Auto-execute error: ' + e.message);
+  }
+}
+
+const _ACTION_ICON = {
+  CHECK:     '🔍',
+  SELL:      '📤',
+  CLOSE:     '📥',
+  CLOSE_ERR: '❌',
+  SELL_ERR:  '❌',
+  SKIP:      '⏭️',
+  ERR:       '❌',
+};
+
+const _ACTION_COLOR = {
+  SELL:  'var(--green)',
+  CLOSE: 'var(--accent)',
+  SELL_ERR:  'var(--red)',
+  CLOSE_ERR: 'var(--red)',
+  ERR:       'var(--red)',
+};
+
+async function loadAutoLog() {
+  try {
+    const data = await fetch(API + '/api/pulse/auto').then(r => r.json());
+    _setAutoUI(data.enabled);
+
+    const rows = (data.log || []).slice().reverse();
+    const el   = document.getElementById('autoLogRows');
+    if (!el) return;
+
+    if (!rows.length) {
+      el.innerHTML = `<span style="color:var(--t3)">No activity yet.</span>`;
+      return;
+    }
+
+    el.innerHTML = rows.map(r => {
+      const icon  = _ACTION_ICON[r.action] || '·';
+      const color = _ACTION_COLOR[r.action] || 'var(--t2)';
+      const time  = (r.time || '').slice(11, 19);
+      const detail = r.error
+        ? `<span style="color:var(--red)">${r.error}</span>`
+        : r.symbol
+          ? `<span style="color:var(--t1);font-weight:600">${r.symbol}</span>${r.ltp ? ' · ₹' + r.ltp : ''}${r.order_id ? ' · #' + r.order_id : ''}`
+          : r.reason
+            ? `<span style="color:var(--t3)">${r.reason}</span>`
+            : r.signal
+              ? `signal=${r.signal} nifty=₹${r.nifty || ''}`
+              : '';
+      return `<div style="display:flex;align-items:baseline;gap:8px">
+        <span style="color:var(--t3);font-variant-numeric:tabular-nums;flex-shrink:0">${time}</span>
+        <span>${icon}</span>
+        <span style="font-weight:700;color:${color}">${r.action}</span>
+        <span style="color:var(--t2)">${detail}</span>
+      </div>`;
+    }).join('');
+  } catch(_) {}
+}
+
 // ── Order execution ───────────────────────────────────────────────────────────
 
 function _updatePerStockLabel(strategy) {
@@ -3068,6 +3225,9 @@ async function init() {
     const res = await fetch(API + '/api/ipo-screen/result');
     if (res.ok) { const d = await res.json(); if (d.results) renderIPOScreen(d); }
   } catch(_) {}
+
+  // Load auto-execute status silently
+  try { await loadAutoLog(); } catch(_) {}
 
   // Check Kite silently for home card status
   try {

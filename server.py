@@ -28,13 +28,19 @@ Endpoints:
   POST /api/ipo-screen/run            — launch IPO breakout screen
   GET  /api/ipo-screen/result         — latest IPO screen results
   GET  /api/ipo-screen/status         — running / has_result / progress message
+
+  GET  /api/pulse/auto                — auto-execute status + trade log
+  POST /api/pulse/auto                — enable / disable auto-execute
 """
 import asyncio
 import calendar
 import os
+import threading
 import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime as _dt
+from zoneinfo import ZoneInfo
 
 warnings.filterwarnings("ignore")
 
@@ -77,6 +83,14 @@ _ML_RANK_TTL    = 300         # seconds
 _ipo_cache:    dict = {}
 _ipo_running:  bool = False
 _ipo_progress: str  = ""
+
+# ── Pulse auto-execute state ──────────────────────────────────────────────────
+_pulse_auto_enabled:  bool        = False
+_pulse_auto_signal:   str         = "FLAT"   # last signal we ACTED on
+_pulse_auto_log:      list        = []
+_pulse_auto_lots:     int         = 1
+_pulse_auto_thread:   threading.Thread | None = None
+_IST                              = ZoneInfo("Asia/Kolkata")
 
 
 # ── ML backtest ───────────────────────────────────────────────────────────────
@@ -547,6 +561,108 @@ def ha_backtest_status():
     return {"running": _ha_bt_running, "has_result": bool(_ha_bt_cache)}
 
 
+# ── Pulse auto-execute background engine ─────────────────────────────────────
+
+def _pulse_auto_loop():
+    """
+    Background thread: checks the HA signal 3 minutes after every 30-min
+    candle close (09:18, 09:48, 10:18, … 15:18) during IST market hours.
+    When the active_signal changes, closes any open NIFTY option position
+    and sells the new ATM option in the correct direction.
+    """
+    global _pulse_auto_enabled, _pulse_auto_signal, _pulse_auto_log, _pulse_auto_lots
+
+    def _log(entry: dict):
+        _pulse_auto_log.append({**entry, "time": _dt.now(_IST).isoformat(timespec="seconds")})
+        if len(_pulse_auto_log) > 100:
+            _pulse_auto_log[:] = _pulse_auto_log[-100:]
+
+    last_checked_slot = ""
+
+    while True:
+        time.sleep(20)
+
+        if not _pulse_auto_enabled:
+            last_checked_slot = ""
+            continue
+
+        now = _dt.now(_IST)
+
+        # Only Mon–Fri, 09:15–15:30 IST
+        if now.weekday() >= 5:
+            continue
+        h, m = now.hour, now.minute
+        if not ((h == 9 and m >= 15) or (10 <= h <= 14) or (h == 15 and m <= 30)):
+            continue
+
+        # Fire 3 min after each 30-min boundary: :18 and :48
+        slot = f"{now.date()}-{h}-{'A' if m < 30 else 'B'}"
+        fire = (m in (18, 19, 20) or m in (48, 49, 50))
+        if not fire or slot == last_checked_slot:
+            continue
+        last_checked_slot = slot
+
+        try:
+            status = kite_auth.kite_status()
+            if not status.get("connected"):
+                _log({"action": "SKIP", "reason": "Kite not connected"})
+                continue
+
+            import pulse_live as pl
+            kite = kite_auth.get_kite()
+
+            sig = pl.current_signal(kite)
+            new_signal = sig.get("active_signal", "FLAT")
+
+            _log({"action": "CHECK", "signal": new_signal,
+                  "prev": _pulse_auto_signal, "nifty": sig.get("nifty_price")})
+
+            if new_signal == "FLAT" or new_signal == _pulse_auto_signal:
+                continue
+
+            # ── Signal changed: close existing, open new ──────────────────
+            positions = pl.nifty_positions(kite)
+            for pos in positions:
+                if pos["quantity"] == 0:
+                    continue
+                try:
+                    oid = pl.close_option(kite, pos["tradingsymbol"], pos["quantity"])
+                    _log({"action": "CLOSE", "symbol": pos["tradingsymbol"],
+                          "qty": pos["quantity"], "order_id": oid})
+                except Exception as exc:
+                    _log({"action": "CLOSE_ERR", "symbol": pos["tradingsymbol"], "error": str(exc)})
+
+            # Sell new ATM option
+            expiry = pl.weekly_expiry(kite)
+            if not expiry:
+                _log({"action": "ERR", "reason": "No weekly expiry found"})
+                continue
+
+            opt = pl.option_details(kite, new_signal, sig["nifty_price"], expiry, strike_offset=0)
+            if not opt or "error" in opt:
+                _log({"action": "ERR", "reason": opt.get("error", "No instrument") if opt else "No instrument"})
+                continue
+
+            try:
+                oid = pl.sell_option(kite, opt["tradingsymbol"], _pulse_auto_lots)
+                _log({"action": "SELL", "signal": new_signal,
+                      "symbol": opt["tradingsymbol"], "ltp": opt.get("ltp"),
+                      "lots": _pulse_auto_lots, "order_id": oid})
+                _pulse_auto_signal = new_signal
+            except Exception as exc:
+                _log({"action": "SELL_ERR", "symbol": opt["tradingsymbol"], "error": str(exc)})
+
+        except Exception as exc:
+            _log({"action": "ERR", "error": str(exc)})
+
+
+def _ensure_auto_thread():
+    global _pulse_auto_thread
+    if _pulse_auto_thread is None or not _pulse_auto_thread.is_alive():
+        _pulse_auto_thread = threading.Thread(target=_pulse_auto_loop, daemon=True, name="pulse-auto")
+        _pulse_auto_thread.start()
+
+
 # ── Pulse live signal + trade ─────────────────────────────────────────────────
 
 @app.get("/api/pulse/signal")
@@ -562,13 +678,15 @@ async def pulse_signal():
     loop = asyncio.get_event_loop()
 
     sig    = await loop.run_in_executor(_executor, lambda: pl.current_signal(kite))
-    expiry = await loop.run_in_executor(_executor, lambda: pl.monthly_expiry(kite))
+    expiry = await loop.run_in_executor(_executor, lambda: pl.weekly_expiry(kite))
     opt    = await loop.run_in_executor(_executor,
-                lambda: pl.option_details(kite, sig["active_signal"], sig["nifty_price"], expiry)) \
+                lambda: pl.option_details(kite, sig["active_signal"], sig["nifty_price"],
+                                          expiry, strike_offset=0)) \
              if expiry and sig.get("active_signal", "FLAT") != "FLAT" else None
     pos    = await loop.run_in_executor(_executor, lambda: pl.nifty_positions(kite))
 
-    return {**sig, "option": opt, "expiry": str(expiry) if expiry else None, "positions": pos}
+    return {**sig, "option": opt, "expiry": str(expiry) if expiry else None,
+            "positions": pos, "auto_enabled": _pulse_auto_enabled}
 
 
 class PulseTradeParams(BaseModel):
@@ -613,6 +731,31 @@ async def pulse_close(params: PulseCloseParams):
     except KiteException as e:
         raise HTTPException(403, str(e))
     return {"order_id": oid, "tradingsymbol": params.tradingsymbol}
+
+
+class PulseAutoParams(BaseModel):
+    enabled: bool
+    lots:    int = 1
+
+
+@app.post("/api/pulse/auto")
+async def pulse_auto_toggle(params: PulseAutoParams):
+    global _pulse_auto_enabled, _pulse_auto_lots
+    _pulse_auto_enabled = params.enabled
+    _pulse_auto_lots    = max(1, params.lots)
+    if params.enabled:
+        _ensure_auto_thread()
+    return {"enabled": _pulse_auto_enabled, "lots": _pulse_auto_lots}
+
+
+@app.get("/api/pulse/auto")
+async def pulse_auto_status():
+    return {
+        "enabled":     _pulse_auto_enabled,
+        "lots":        _pulse_auto_lots,
+        "last_signal": _pulse_auto_signal,
+        "log":         _pulse_auto_log[-30:],
+    }
 
 
 # ── Order execution ───────────────────────────────────────────────────────────

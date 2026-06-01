@@ -2,14 +2,13 @@
 pulse_live.py — Live signal and options execution for Pulse strategy.
 
 Signal logic (same as backtest):
-  Bullish HA bar (no lower wick) → LONG  → Sell ATM-500 PE (monthly)
-  Bearish HA bar (no upper wick) → SHORT → Sell ATM+500 CE (monthly)
+  Bullish HA bar (no lower wick) → LONG  → Sell ATM PE (weekly)
+  Bearish HA bar (no upper wick) → SHORT → Sell ATM CE (weekly)
 
-Monthly expiry = last Thursday of the current/next month.
+Weekly expiry = nearest Thursday in NFO instrument list.
 """
 from __future__ import annotations
 
-import math
 from datetime import date, timedelta
 
 import pandas as pd
@@ -22,26 +21,40 @@ def _kite():
     return kite_auth.get_kite()
 
 
-# ── Monthly expiry ─────────────────────────────────────────────────────────────
+# ── Expiry helpers ─────────────────────────────────────────────────────────────
 
-def monthly_expiry(kite) -> date | None:
-    """Return the nearest upcoming monthly NIFTY options expiry (last Thursday)."""
+def weekly_expiry(kite) -> date | None:
+    """Return the nearest upcoming NIFTY weekly expiry from the NFO instrument list."""
     instruments = kite.instruments("NFO")
     today = date.today()
-
     expiries = sorted(set(
         i["expiry"] for i in instruments
         if i["name"] == "NIFTY"
         and i["instrument_type"] in ("CE", "PE")
         and i["expiry"] >= today
     ))
+    return expiries[0] if expiries else None
 
+
+def monthly_expiry(kite) -> date | None:
+    """Return the nearest upcoming monthly NIFTY expiry (furthest-out Thursday per month)."""
+    instruments = kite.instruments("NFO")
+    today = date.today()
+    expiries = sorted(set(
+        i["expiry"] for i in instruments
+        if i["name"] == "NIFTY"
+        and i["instrument_type"] in ("CE", "PE")
+        and i["expiry"] >= today
+    ))
+    # Group by month; pick the last expiry in the current/next month
+    by_month: dict[tuple, date] = {}
     for exp in expiries:
-        if exp.weekday() == 1:                          # Tuesday
-            next_tue = exp + timedelta(days=7)
-            if next_tue.month != exp.month:             # last Tuesday of month
-                return exp
-    return None
+        key = (exp.year, exp.month)
+        by_month[key] = exp         # later dates overwrite earlier ones
+    if not by_month:
+        return None
+    keys = sorted(by_month)
+    return by_month[keys[0]]
 
 
 # ── Live signal ────────────────────────────────────────────────────────────────
@@ -103,13 +116,21 @@ def current_signal(kite) -> dict:
 
 # ── Option selection ───────────────────────────────────────────────────────────
 
-def option_details(kite, signal: str, nifty_price: float, expiry: date) -> dict | None:
-    """Return instrument info + LTP for the option to sell."""
+def option_details(kite, signal: str, nifty_price: float, expiry: date,
+                   strike_offset: int = 0) -> dict | None:
+    """
+    Return instrument info + LTP for the option to sell.
+
+    strike_offset: added to ATM after rounding.
+        0   → sell ATM  (default)
+       -500 → sell ATM-500 put  (legacy deep OTM)
+       +500 → sell ATM+500 call (legacy deep OTM)
+    """
     if signal == "FLAT":
         return None
 
     atm    = round(nifty_price / ATM_STEP) * ATM_STEP
-    strike = (atm - 500) if signal == "LONG" else (atm + 500)
+    strike = atm + strike_offset
     otype  = "PE" if signal == "LONG" else "CE"
 
     instruments = kite.instruments("NFO")
