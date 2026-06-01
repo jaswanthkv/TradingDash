@@ -95,15 +95,24 @@ def preview(to_buy: list, to_sell: list, capital_per_stock: float) -> dict:
         })
 
     for sym in buy_syms:
-        ltp   = prices.get(sym, 0)
-        tick  = ticks.get(sym, 0.05)
-        qty   = math.floor(capital_per_stock / ltp) if ltp > 0 else 0
-        price = _limit_price(ltp, "BUY", tick)
+        ltp        = prices.get(sym, 0)
+        tick       = ticks.get(sym, 0.05)
+        target_qty = math.floor(capital_per_stock / ltp) if ltp > 0 else 0
+        held_qty   = holdings.get(sym, {}).get("quantity", 0)
+        qty        = max(0, target_qty - held_qty)
+        price      = _limit_price(ltp, "BUY", tick)
+        note       = ""
+        if ltp == 0:
+            note = "Price unavailable"
+        elif held_qty >= target_qty:
+            note = f"Already holding {held_qty}"
+        elif held_qty > 0:
+            note = f"Held {held_qty}, buying {qty}"
         orders.append({
             "symbol": sym, "action": "BUY",
             "quantity": qty, "price": price,
             "estimated_amount": round(qty * price, 2),
-            "note": "Price unavailable" if ltp == 0 else "",
+            "note": note,
         })
 
     total_buy  = sum(o["estimated_amount"] for o in orders if o["action"] == "BUY")
@@ -159,14 +168,23 @@ def execute(to_buy: list, to_sell: list, capital_per_stock: float) -> dict:
         time.sleep(_ORDER_DELAY)
 
     for sym in buy_syms:
-        ltp  = all_prices.get(sym, 0)
-        tick = ticks.get(sym, 0.05)
-        qty  = math.floor(capital_per_stock / ltp) if ltp > 0 else 0
+        ltp        = all_prices.get(sym, 0)
+        tick       = ticks.get(sym, 0.05)
+        target_qty = math.floor(capital_per_stock / ltp) if ltp > 0 else 0
+        held_qty   = holdings.get(sym, {}).get("quantity", 0)
+        qty        = max(0, target_qty - held_qty)
+
         if qty <= 0:
-            note = "Symbol not found on NSE" if ltp == 0 else "Qty rounds to 0 — increase capital"
+            if ltp == 0:
+                note = "Symbol not found on NSE"
+            elif held_qty >= target_qty:
+                note = f"Already holding {held_qty} share{'s' if held_qty != 1 else ''}"
+            else:
+                note = "Qty rounds to 0 — increase capital"
             results.append({"symbol": sym, "action": "BUY", "quantity": 0,
                             "status": "skipped", "note": note})
             continue
+
         price = _limit_price(ltp, "BUY", tick)
         try:
             oid = kite.place_order(
@@ -180,7 +198,8 @@ def execute(to_buy: list, to_sell: list, capital_per_stock: float) -> dict:
                 product=kite.PRODUCT_CNC,
             )
             results.append({"symbol": sym, "action": "BUY", "quantity": qty,
-                            "price": price, "status": "placed", "order_id": oid})
+                            "price": price, "status": "placed", "order_id": oid,
+                            "note": f"Held {held_qty}, buying {qty}" if held_qty else ""})
         except Exception as e:
             results.append({"symbol": sym, "action": "BUY", "quantity": qty,
                             "price": price, "status": "failed", "error": str(e)})
