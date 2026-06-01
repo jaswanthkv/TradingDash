@@ -810,8 +810,14 @@ html{scroll-behavior:smooth}
         </div>
         <div id="momOrderResults" class="hidden">
           <div id="momResultRows"></div>
-          <div style="padding:10px 16px;font-size:12px;color:var(--t2);border-top:1px solid var(--border-inner);
-            background:var(--bg-alt)" id="momResultSummary"></div>
+          <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;
+            border-top:1px solid var(--border-inner);background:var(--bg-alt)">
+            <span style="font-size:12px;color:var(--t2)" id="momResultSummary"></span>
+            <button class="btn btn-ghost btn-sm hidden" id="momRetryBtn"
+              onclick="retryFailedOrders('mom')" style="margin-left:auto;color:var(--accent)">
+              ↻ Retry Failed
+            </button>
+          </div>
         </div>
       </div>
 
@@ -940,8 +946,14 @@ html{scroll-behavior:smooth}
           </div>
           <div id="minOrderResults" class="hidden">
             <div id="minResultRows"></div>
-            <div style="padding:10px 16px;font-size:12px;color:var(--t2);border-top:1px solid var(--border-inner);
-              background:var(--bg-alt)" id="minResultSummary"></div>
+            <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;
+              border-top:1px solid var(--border-inner);background:var(--bg-alt)">
+              <span style="font-size:12px;color:var(--t2)" id="minResultSummary"></span>
+              <button class="btn btn-ghost btn-sm hidden" id="minRetryBtn"
+                onclick="retryFailedOrders('min')" style="margin-left:auto;color:var(--accent)">
+                ↻ Retry Failed
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2652,6 +2664,20 @@ async function executeOrders(strategy) {
        <span style="color:var(--red)">✗ ${s.failed} failed</span> &nbsp;·&nbsp;
        <span style="color:var(--t3)">${s.skipped} skipped</span>`;
 
+    // Show retry button if any orders failed
+    const retryBtn = document.getElementById(`${pfx}RetryBtn`);
+    const failed   = data.results.filter(r => r.status === 'failed');
+    if (retryBtn) {
+      if (failed.length > 0) {
+        retryBtn.classList.remove('hidden');
+        retryBtn.textContent = `↻ Retry ${failed.length} Failed`;
+        // Store failed symbols keyed by strategy prefix for retryFailedOrders()
+        window[`_${pfx}FailedResults`] = { failed, capital_per_stock: p.capital_per_stock };
+      } else {
+        retryBtn.classList.add('hidden');
+      }
+    }
+
     document.getElementById(`${pfx}OrderPreview`).classList.add('hidden');
     document.getElementById(`${pfx}OrderResults`).classList.remove('hidden');
     statusEl.textContent = 'Done';
@@ -2663,6 +2689,64 @@ async function executeOrders(strategy) {
     showToast('Order execution failed: ' + e.message, 'error');
   } finally {
     execBtn.disabled = false;
+  }
+}
+
+async function retryFailedOrders(strategy) {
+  const pfx   = strategy === 'min' ? 'min' : 'mom';
+  const state = window[`_${pfx}FailedResults`];
+  if (!state || !state.failed.length) return;
+
+  const failed = state.failed;
+  const to_buy  = failed.filter(r => r.action === 'BUY').map(r => r.symbol);
+  const to_sell = failed.filter(r => r.action === 'SELL').map(r => r.symbol);
+
+  const ok = confirm(
+    `Retry ${failed.length} failed order${failed.length > 1 ? 's' : ''}?\n\n` +
+    failed.map(r => `${r.action}  ${r.symbol}  qty ${r.quantity}`).join('\n') +
+    `\n\nReal orders will be placed immediately.`
+  );
+  if (!ok) return;
+
+  const retryBtn = document.getElementById(`${pfx}RetryBtn`);
+  const statusEl = document.getElementById(`${pfx}TradeStatus`);
+  if (retryBtn) { retryBtn.disabled = true; retryBtn.textContent = 'Retrying…'; }
+  if (statusEl)   statusEl.textContent = 'Retrying failed orders…';
+
+  try {
+    const res = await fetch(API + '/api/orders/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to_buy, to_sell, capital_per_stock: state.capital_per_stock }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    _renderResultRows(data.results, `${pfx}ResultRows`);
+    const s = data.summary;
+    document.getElementById(`${pfx}ResultSummary`).innerHTML =
+      `<span style="color:var(--green)">✓ ${s.placed} placed</span> &nbsp;·&nbsp;
+       <span style="color:var(--red)">✗ ${s.failed} failed</span> &nbsp;·&nbsp;
+       <span style="color:var(--t3)">${s.skipped} skipped</span>`;
+
+    const stillFailed = data.results.filter(r => r.status === 'failed');
+    if (retryBtn) {
+      if (stillFailed.length > 0) {
+        retryBtn.disabled = false;
+        retryBtn.textContent = `↻ Retry ${stillFailed.length} Failed`;
+        window[`_${pfx}FailedResults`] = { failed: stillFailed, capital_per_stock: state.capital_per_stock };
+      } else {
+        retryBtn.classList.add('hidden');
+        window[`_${pfx}FailedResults`] = null;
+      }
+    }
+
+    if (statusEl) statusEl.textContent = 'Retry done';
+    showToast(`Retry: ${s.placed} placed · ${s.failed} failed`, s.failed > 0 ? 'error' : 'success');
+  } catch(e) {
+    if (retryBtn) { retryBtn.disabled = false; retryBtn.textContent = `↻ Retry ${failed.length} Failed`; }
+    if (statusEl) statusEl.textContent = 'Retry error: ' + e.message;
+    showToast('Retry failed: ' + e.message, 'error');
   }
 }
 
