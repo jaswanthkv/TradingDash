@@ -84,6 +84,73 @@ _ipo_cache:    dict = {}
 _ipo_running:  bool = False
 _ipo_progress: str  = ""
 
+# ── Auto-refresh helpers ─────────────────────────────────────────────────────
+
+def _is_stale(cache: dict) -> bool:
+    """True if cache is empty or run_at is not in the current calendar month."""
+    if not cache:
+        return True
+    run_at = cache.get("run_at", "")
+    try:
+        run_date = _dt.fromisoformat(run_at[:10])
+        now = _dt.now()
+        return run_date.year != now.year or run_date.month != now.month
+    except Exception:
+        return True
+
+
+def _bg_run_momentum(m: int = 8, x: int = 3, years: int = 10):
+    global _mom_bt_running, _mom_bt_cache, _mom_bt_progress
+    if _mom_bt_running:
+        return
+    import backtest as bt
+    _mom_bt_running = True
+    _mom_bt_progress = {"step": 0, "total": 5, "msg": "Auto-refresh…"}
+    def _cb(step, total, msg):
+        _mom_bt_progress.update({"step": step, "total": total, "msg": msg})
+    try:
+        result = bt.run_backtest(m=m, x=x, years=years, progress_cb=_cb)
+        _mom_bt_cache = result
+        db.save_backtest(years, m, x, result, strategy="momentum")
+    except Exception as e:
+        print(f"[auto-refresh] momentum failed: {e}")
+    finally:
+        _mom_bt_running = False
+
+
+def _bg_run_minervini(years: int = 5, top_n: int = 20, cost_bps: float = 20):
+    global _min_bt_running, _min_bt_cache, _min_bt_progress
+    if _min_bt_running:
+        return
+    import minervini as mv
+    _min_bt_running = True
+    _min_bt_progress = {"step": 0, "total": 5, "msg": "Auto-refresh…"}
+    def _cb(step, total, msg):
+        _min_bt_progress.update({"step": step, "total": total, "msg": msg})
+    try:
+        result = mv.run_backtest(years=years, top_n=top_n, cost_bps=cost_bps, progress_cb=_cb)
+        _min_bt_cache = result
+        db.save_backtest(years, top_n, cost_bps, result, strategy="minervini")
+    except Exception as e:
+        print(f"[auto-refresh] minervini failed: {e}")
+    finally:
+        _min_bt_running = False
+
+
+def _startup_auto_refresh():
+    """Run once 30 s after boot — re-runs any backtest not updated this month."""
+    time.sleep(30)
+    if _is_stale(_mom_bt_cache) and not _mom_bt_running:
+        print("[auto-refresh] momentum backtest is stale — starting background run")
+        _bg_run_momentum()
+    if _is_stale(_min_bt_cache) and not _min_bt_running:
+        print("[auto-refresh] minervini backtest is stale — starting background run")
+        _bg_run_minervini()
+
+
+threading.Thread(target=_startup_auto_refresh, daemon=True).start()
+
+
 # ── Pulse auto-execute state ──────────────────────────────────────────────────
 _pulse_auto_enabled:  bool        = False
 _pulse_auto_signal:   str         = "FLAT"   # last signal we ACTED on
@@ -869,6 +936,18 @@ def ipo_screen_status():
         "running":    _ipo_running,
         "has_result": bool(_ipo_cache),
         "progress":   _ipo_progress,
+    }
+
+
+# ── Report status ────────────────────────────────────────────────────────────
+
+@app.get("/api/report/status")
+def report_refresh_status():
+    return {
+        "momentum_running":  _mom_bt_running,
+        "minervini_running": _min_bt_running,
+        "momentum_stale":    _is_stale(_mom_bt_cache),
+        "minervini_stale":   _is_stale(_min_bt_cache),
     }
 
 

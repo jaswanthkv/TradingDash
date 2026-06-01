@@ -1399,6 +1399,7 @@ function switchTab(name, el) {
     clearInterval(_pulseCountdownTimer);
     document.getElementById('kpiBar').style.display = 'none';
     renderReport();
+    _startReportPoll();
   }
 }
 
@@ -2093,6 +2094,7 @@ function renderMomentum(d) {
   document.getElementById('momResults').classList.remove('hidden');
   window._momData = d;
   if (_activeTab === 'momentum') renderKPIsMomentum(d);
+  if (_activeTab === 'report') renderReport();
   drawSparkline('spark-mom', d.strategy_curve);
 
   const ctx = document.getElementById('momGrowthChart').getContext('2d');
@@ -2818,6 +2820,7 @@ function renderMinervini(d) {
   show('minResults');
 
   if (_activeTab === 'minervini') renderKPIs(d);
+  if (_activeTab === 'report') renderReport();
 
   // Growth chart
   const ctx = document.getElementById('minGrowthChart').getContext('2d');
@@ -2977,6 +2980,37 @@ function renderScreen() {
 }
 
 // ── Monthly Report ────────────────────────────────────────────────────────────
+
+let _reportPollTimer = null;
+window._reportRefreshing = false;
+
+async function _startReportPoll() {
+  clearTimeout(_reportPollTimer);
+  try {
+    const st = await fetch(API + '/api/report/status').then(r => r.json());
+    const running = st.momentum_running || st.minervini_running;
+    const wasRefreshing = window._reportRefreshing;
+    window._reportRefreshing = running;
+
+    if (running) {
+      renderReport(); // show spinner
+      _reportPollTimer = setTimeout(_startReportPoll, 15000);
+    } else if (wasRefreshing) {
+      // Just finished — reload fresh data then re-render
+      window._reportRefreshing = false;
+      try {
+        const r1 = await fetch(API + '/api/momentum/backtest/result');
+        if (r1.ok) renderMomentum(await r1.json());
+      } catch(_) {}
+      try {
+        const r2 = await fetch(API + '/api/minervini/backtest/result');
+        if (r2.ok) renderMinervini(await r2.json());
+      } catch(_) {}
+      renderReport();
+    }
+  } catch(_) {}
+}
+
 function renderReport() {
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const today  = new Date();
@@ -3030,17 +3064,22 @@ function renderReport() {
     return v == null;
   });
 
+  const refreshing = window._reportRefreshing;
   const warningHtml = staleStrategies.length ? `
     <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;margin-bottom:16px;
       background:var(--bg-alt);border:1px solid var(--border);border-radius:10px;
-      border-left:3px solid #f59e0b">
-      <span style="font-size:16px;flex-shrink:0">⚠️</span>
+      border-left:3px solid ${refreshing ? 'var(--accent)' : '#f59e0b'}">
+      <span style="font-size:16px;flex-shrink:0">${refreshing ? '🔄' : '⚠️'}</span>
       <div>
-        <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:3px">Stale backtest data</div>
+        <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:3px">
+          ${refreshing ? 'Auto-refreshing…' : 'Stale backtest data'}
+        </div>
         <div style="font-size:11px;color:var(--t2)">
           <strong>${staleStrategies.map(s => s.label).join(', ')}</strong>
           ${staleStrategies.length > 1 ? 'don\'t have' : 'doesn\'t have'} ${curMonthLabel} data yet.
-          Re-run ${staleStrategies.length > 1 ? 'those backtests' : 'that backtest'} to see consistent results.
+          ${refreshing
+            ? 'Running in background — report will update automatically when done.'
+            : 'Backtests auto-run on server startup; re-run manually if needed.'}
         </div>
       </div>
     </div>` : '';
