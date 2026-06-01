@@ -6,8 +6,11 @@ Flow:
   2. execute(to_buy, to_sell, capital_per_stock) — place limit CNC orders (sells first)
 
 Limit order pricing:
-  BUY  → LTP × 1.003  (+0.3%) so the order fills at or below this price
-  SELL → LTP × 0.997  (−0.3%) so the order fills at or above this price
+  BUY  → ceil(LTP × 1.003 / tick) × tick  — rounds UP to next valid tick
+  SELL → floor(LTP × 0.997 / tick) × tick — rounds DOWN to next valid tick
+
+Tick sizes (NSE): 0.05 for most equities; 0.10 / 0.50 / 1.00 for some.
+We fetch the instruments list from Kite on first call and cache for 1 hour.
 
 Rate limiting: 0.4 s pause between each order (Kite allows ~3/s).
 """
@@ -17,15 +20,40 @@ import kite_auth
 
 _ORDER_DELAY = 0.4   # seconds between consecutive orders
 
-
-def _limit_price(ltp: float, action: str) -> float:
-    """Return a limit price with a small buffer to ensure quick fill."""
-    buf = 1.003 if action == "BUY" else 0.997
-    return round(ltp * buf, 2)
+_tick_cache: dict  = {}
+_tick_ts:    float = 0.0
+_TICK_TTL          = 3600   # refresh tick map every hour
 
 
 def _kite():
     return kite_auth.get_kite()
+
+
+def _load_tick_map(kite) -> dict:
+    """Return {tradingsymbol: tick_size} for NSE EQ instruments (cached 1 h)."""
+    global _tick_cache, _tick_ts
+    if time.time() - _tick_ts > _TICK_TTL:
+        instruments = kite.instruments("NSE")
+        _tick_cache = {
+            i["tradingsymbol"]: float(i.get("tick_size") or 0.05)
+            for i in instruments
+            if i.get("instrument_type") == "EQ"
+        }
+        _tick_ts = time.time()
+    return _tick_cache
+
+
+def _limit_price(ltp: float, action: str, tick: float = 0.05) -> float:
+    """
+    Limit price with 0.3% buffer snapped to the instrument's tick size.
+    BUY  → ceil  so we never undershoot the ask.
+    SELL → floor so we never overshoot the bid.
+    """
+    if tick <= 0:
+        tick = 0.05
+    raw     = ltp * (1.003 if action == "BUY" else 0.997)
+    snapped = (math.ceil if action == "BUY" else math.floor)(raw / tick) * tick
+    return round(snapped, 4)   # keep extra precision; Kite truncates internally
 
 
 def get_holdings() -> dict:
@@ -44,11 +72,12 @@ def _ltp(kite, symbols: list) -> dict:
 
 
 def preview(to_buy: list, to_sell: list, capital_per_stock: float) -> dict:
-    kite     = _kite()
+    kite      = _kite()
     buy_syms  = [t.replace(".NS", "") for t in to_buy]
     sell_syms = [t.replace(".NS", "") for t in to_sell]
     holdings  = get_holdings()
     prices    = _ltp(kite, buy_syms)
+    ticks     = _load_tick_map(kite)
 
     orders = []
 
@@ -56,7 +85,8 @@ def preview(to_buy: list, to_sell: list, capital_per_stock: float) -> dict:
         held  = holdings.get(sym, {})
         qty   = held.get("quantity", 0)
         ltp   = held.get("last_price", 0)
-        price = _limit_price(ltp, "SELL")
+        tick  = ticks.get(sym, 0.05)
+        price = _limit_price(ltp, "SELL", tick)
         orders.append({
             "symbol": sym, "action": "SELL",
             "quantity": qty, "price": price,
@@ -66,8 +96,9 @@ def preview(to_buy: list, to_sell: list, capital_per_stock: float) -> dict:
 
     for sym in buy_syms:
         ltp   = prices.get(sym, 0)
+        tick  = ticks.get(sym, 0.05)
         qty   = math.floor(capital_per_stock / ltp) if ltp > 0 else 0
-        price = _limit_price(ltp, "BUY")
+        price = _limit_price(ltp, "BUY", tick)
         orders.append({
             "symbol": sym, "action": "BUY",
             "quantity": qty, "price": price,
@@ -93,8 +124,9 @@ def execute(to_buy: list, to_sell: list, capital_per_stock: float) -> dict:
     buy_syms  = [t.replace(".NS", "") for t in to_buy]
     sell_syms = [t.replace(".NS", "") for t in to_sell]
     holdings  = get_holdings()
+    ticks     = _load_tick_map(kite)
 
-    # Fetch fresh LTP for both sides in one call
+    # Fresh LTP for both sides in one call
     all_prices = _ltp(kite, buy_syms + sell_syms)
 
     results = []
@@ -106,7 +138,8 @@ def execute(to_buy: list, to_sell: list, capital_per_stock: float) -> dict:
                             "status": "skipped", "note": "Not in holdings"})
             continue
         ltp   = all_prices.get(sym) or holdings.get(sym, {}).get("last_price", 0)
-        price = _limit_price(ltp, "SELL")
+        tick  = ticks.get(sym, 0.05)
+        price = _limit_price(ltp, "SELL", tick)
         try:
             oid = kite.place_order(
                 variety=kite.VARIETY_REGULAR,
@@ -126,13 +159,15 @@ def execute(to_buy: list, to_sell: list, capital_per_stock: float) -> dict:
         time.sleep(_ORDER_DELAY)
 
     for sym in buy_syms:
-        ltp   = all_prices.get(sym, 0)
-        qty   = math.floor(capital_per_stock / ltp) if ltp > 0 else 0
-        price = _limit_price(ltp, "BUY")
+        ltp  = all_prices.get(sym, 0)
+        tick = ticks.get(sym, 0.05)
+        qty  = math.floor(capital_per_stock / ltp) if ltp > 0 else 0
         if qty <= 0:
+            note = "Symbol not found on NSE" if ltp == 0 else "Qty rounds to 0 — increase capital"
             results.append({"symbol": sym, "action": "BUY", "quantity": 0,
-                            "status": "skipped", "note": "Price unavailable or qty 0"})
+                            "status": "skipped", "note": note})
             continue
+        price = _limit_price(ltp, "BUY", tick)
         try:
             oid = kite.place_order(
                 variety=kite.VARIETY_REGULAR,
