@@ -325,8 +325,13 @@ async def portfolio_daily_change():
 
     all_tickers = list(set(min_tickers_now + mom_tickers_now +
                            min_tickers_mtd + mom_tickers_mtd + ["^CRSLDX"]))
-    from datetime import date as _date
-    month_start = _date.today().replace(day=1).strftime("%Y-%m-%d")
+    from datetime import date as _date, timedelta as _td
+    today       = _date.today()
+    month_start = today.replace(day=1)
+    # Fetch from 8 calendar days before month start so we capture the last
+    # close of the previous month as the MTD base — avoids 0% on day 1.
+    pre_start   = (month_start - _td(days=8)).strftime("%Y-%m-%d")
+    month_start_str = month_start.strftime("%Y-%m-%d")
 
     def _fetch():
         # Last-session change (5d window, last bar vs prev bar)
@@ -340,19 +345,39 @@ async def portfolio_daily_change():
             day_chg = {col: round(float(pct[col]), 2)
                        for col in pct.index if not pd.isna(pct[col])}
 
-        # MTD change: from first trading day of current month to latest close
-        raw_m = yf.download(all_tickers, start=month_start, interval="1d",
+        # MTD change: base = last close of previous month, current = latest close.
+        # Downloading from 8 days before month start captures the prev-month close
+        # even when today is the 1st, avoiding the 0% trap.
+        raw_m = yf.download(all_tickers, start=pre_start, interval="1d",
                             auto_adjust=True, progress=False, threads=True)
         cm = raw_m["Close"] if isinstance(raw_m.columns, pd.MultiIndex) else raw_m
         cm = cm.dropna(how="all")
+        cm.index = pd.to_datetime(cm.index).tz_localize(None)
+
         mtd_chg = {}
-        if len(cm) >= 1:
-            # Use first non-NaN per column so tickers starting mid-month don't get NaN
-            first_vals = cm.apply(lambda col: col.dropna().iloc[0] if col.notna().any() else float("nan"))
-            last_vals  = cm.apply(lambda col: col.dropna().iloc[-1] if col.notna().any() else float("nan"))
-            pct_m = (last_vals / first_vals - 1) * 100
-            mtd_chg = {col: round(float(pct_m[col]), 2)
-                       for col in pct_m.index if not pd.isna(pct_m[col])}
+        if not cm.empty:
+            # Base: last row strictly before the 1st of the current month
+            pre_month = cm[cm.index < pd.Timestamp(month_start_str)]
+            cur_month  = cm[cm.index >= pd.Timestamp(month_start_str)]
+
+            if not pre_month.empty and not cur_month.empty:
+                base_vals = pre_month.apply(
+                    lambda col: col.dropna().iloc[-1] if col.notna().any() else float("nan"))
+                last_vals = cur_month.apply(
+                    lambda col: col.dropna().iloc[-1] if col.notna().any() else float("nan"))
+            elif not cur_month.empty:
+                # No pre-month data — fall back to first vs last within month
+                base_vals = cur_month.apply(
+                    lambda col: col.dropna().iloc[0] if col.notna().any() else float("nan"))
+                last_vals = cur_month.apply(
+                    lambda col: col.dropna().iloc[-1] if col.notna().any() else float("nan"))
+            else:
+                base_vals = last_vals = pd.Series(dtype=float)
+
+            if not base_vals.empty:
+                pct_m = (last_vals / base_vals - 1) * 100
+                mtd_chg = {col: round(float(pct_m[col]), 2)
+                           for col in pct_m.index if not pd.isna(pct_m[col])}
 
         return day_chg, mtd_chg, c5, cm
 
@@ -373,7 +398,9 @@ async def portfolio_daily_change():
     as_of = str(b5.index[-1])[:10] if len(b5) >= 1 else ""
     prev  = str(b5.index[-2])[:10] if len(b5) >= 2 else ""
     bm    = cm["^CRSLDX"].dropna() if "^CRSLDX" in cm.columns else pd.Series(dtype=float)
-    month_start_actual = str(bm.index[0])[:10] if len(bm) >= 1 else month_start
+    # Show the actual first trading day of the current month (not pre-month rows)
+    bm_cur = bm[bm.index >= pd.Timestamp(month_start_str)] if not bm.empty else bm
+    month_start_actual = str(bm_cur.index[0])[:10] if len(bm_cur) >= 1 else month_start_str
 
     return {
         "nifty500":        changes.get("^CRSLDX"),
