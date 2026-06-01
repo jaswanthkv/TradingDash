@@ -57,10 +57,39 @@ def _limit_price(ltp: float, action: str, tick: float = 0.05) -> float:
 
 
 def get_holdings() -> dict:
-    """Returns {symbol: holding} for all NSE holdings with qty > 0."""
-    kite = _kite()
-    return {h["tradingsymbol"]: h for h in kite.holdings()
-            if h.get("quantity", 0) > 0}
+    """
+    Returns {symbol: holding} combining:
+      - Settled holdings (T+1, from kite.holdings())
+      - Today's CNC buys not yet settled (from kite.positions()["day"])
+
+    Same-day CNC purchases don't appear in holdings until next session,
+    so merging positions prevents duplicate orders on retry runs.
+    """
+    kite   = _kite()
+    result = {h["tradingsymbol"]: dict(h)
+              for h in kite.holdings() if h.get("quantity", 0) > 0}
+
+    try:
+        for p in kite.positions().get("day", []):
+            if p.get("product") != "CNC":
+                continue
+            qty = p.get("quantity", 0)
+            if qty <= 0:
+                continue
+            sym = p["tradingsymbol"]
+            if sym in result:
+                result[sym]["quantity"] = result[sym]["quantity"] + qty
+            else:
+                result[sym] = {
+                    "tradingsymbol": sym,
+                    "quantity":      qty,
+                    "average_price": p.get("average_price", 0),
+                    "last_price":    p.get("last_price", 0),
+                }
+    except Exception:
+        pass   # positions call failing shouldn't block order execution
+
+    return result
 
 
 def _ltp(kite, symbols: list) -> dict:
