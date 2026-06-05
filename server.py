@@ -30,6 +30,7 @@ Endpoints:
 """
 import asyncio
 import calendar
+import json
 import os
 import threading
 import time
@@ -57,6 +58,60 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
 _executor = ThreadPoolExecutor(max_workers=4)
+
+# Held-portfolio snapshot — the ACTUAL stocks you hold per strategy, captured when
+# orders execute (only successfully-filled buys). Frozen until the next rebalance.
+# This is the source of truth for the Portfolio tab, independent of backtest re-runs.
+_HELD_FILE = os.path.join(os.path.dirname(__file__), "held_portfolio.json")
+
+
+def _load_held() -> dict:
+    try:
+        with open(_HELD_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_held(strategy: str, holdings: list, as_of: str):
+    data = _load_held()
+    data[strategy] = {"as_of": as_of, "holdings": holdings}
+    with open(_HELD_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def _held_holdings(strategy: str) -> list:
+    """Return the snapshot ticker list for a strategy, or [] if none captured yet."""
+    return _load_held().get(strategy, {}).get("holdings", [])
+
+
+def _strip_partial_month(result: dict) -> dict:
+    """Null out the current (partial) month from monthly_returns/monthly_bench grids."""
+    if not result:
+        return result
+    import copy
+    today       = date.today()
+    cur_yr      = today.year
+    cur_mo_abbr = today.strftime("%b")   # e.g. "Jun"
+    cur_ym      = today.strftime("%Y-%m")
+    result = copy.deepcopy(result)
+    for grid_key in ("monthly_returns", "monthly_bench"):
+        for row in result.get(grid_key, []):
+            if row.get("year") == cur_yr and cur_mo_abbr in row:
+                old_val = row[cur_mo_abbr]
+                row[cur_mo_abbr] = None
+                if old_val is not None:
+                    annual = row.get("Annual")
+                    if annual is not None:
+                        factor = 1 + old_val / 100
+                        if factor != 0:
+                            row["Annual"] = round(((1 + annual / 100) / factor - 1) * 100, 2)
+    for entry in result.get("rebalance_history", []):
+        if entry.get("date") == cur_ym:
+            entry["period_ret_pct"] = None
+            entry["bench_ret_pct"]  = None
+    return result
+
 
 # In-memory caches — seeded from DB on startup
 _ml_bt_cache: dict    = db.get_latest_backtest(strategy="ml")
@@ -262,7 +317,7 @@ async def momentum_backtest_run(params: MomentumParams):
 def momentum_backtest_result():
     if not _mom_bt_cache:
         raise HTTPException(404, "No momentum backtest result — run one first")
-    return _mom_bt_cache
+    return _strip_partial_month(_mom_bt_cache)
 
 
 @app.get("/api/momentum/backtest/status")
@@ -313,7 +368,7 @@ async def minervini_backtest_run(params: MinerviniParams):
 def minervini_backtest_result():
     if not _min_bt_cache:
         raise HTTPException(404, "No Trend Breakout backtest result — run one first")
-    return _min_bt_cache
+    return _strip_partial_month(_min_bt_cache)
 
 
 @app.get("/api/minervini/backtest/status")
@@ -368,11 +423,14 @@ async def portfolio_daily_change():
     import yfinance as yf
     import numpy as np
 
-    # Last rebalance holdings for each strategy
+    # Held holdings: prefer executed snapshot, else last backtest rebalance
     min_tickers_now, mom_tickers_now = [], []
     if _min_bt_cache:
         rh = _min_bt_cache.get("rebalance_history", [])
-        if rh:
+        snap = _held_holdings("minervini")
+        if snap:
+            min_tickers_now = snap
+        elif rh:
             min_tickers_now = rh[-1].get("holdings", [])
     if _mom_bt_cache:
         rh = _mom_bt_cache.get("rebalance_history", [])
@@ -393,73 +451,55 @@ async def portfolio_daily_change():
     month_start_str = month_start.strftime("%Y-%m-%d")
 
     def _fetch():
-        # Last-session change (5d window, last bar vs prev bar)
-        raw5 = yf.download(all_tickers, period="5d", interval="1d",
-                           auto_adjust=True, progress=False, threads=True)
-        c5 = raw5["Close"] if isinstance(raw5.columns, pd.MultiIndex) else raw5
-        c5 = c5.ffill().dropna(how="all")
-        day_chg = {}
-        if len(c5) >= 2:
-            pct = c5.pct_change().iloc[-1] * 100
-            day_chg = {col: round(float(pct[col]), 2)
-                       for col in pct.index if not pd.isna(pct[col])}
-
-        # MTD change: base = last close of previous month, current = latest close.
-        # Downloading from 8 days before month start captures the prev-month close
-        # even when today is the 1st, avoiding the 0% trap.
+        # Single download covers Today, MTD, and entry prices — same prices, no divergence.
         raw_m = yf.download(all_tickers, start=pre_start, interval="1d",
                             auto_adjust=True, progress=False, threads=True)
         cm = raw_m["Close"] if isinstance(raw_m.columns, pd.MultiIndex) else raw_m
         cm = cm.dropna(how="all")
         cm.index = pd.to_datetime(cm.index).tz_localize(None)
 
-        mtd_chg = {}
+        # ── Today: last row vs second-to-last ──────────────────────────────
+        day_chg = {}
+        if len(cm) >= 2:
+            last, prev = cm.iloc[-1], cm.iloc[-2]
+            for col in cm.columns:
+                p, l = prev.get(col), last.get(col)
+                if pd.notna(p) and pd.notna(l) and p > 0:
+                    day_chg[col] = round((l / p - 1) * 100, 2)
+
+        # ── MTD: last close of previous month → today ──────────────────────
+        mtd_chg    = {}
+        mtd_base   = ""
+        entry_prices = {}
+        entry_chg    = {}
         if not cm.empty:
-            # Base: last row strictly before the 1st of the current month
-            pre_month = cm[cm.index < pd.Timestamp(month_start_str)]
-            cur_month  = cm[cm.index >= pd.Timestamp(month_start_str)]
+            pre_month = cm[cm.index <  pd.Timestamp(month_start_str)]
+            cur_month = cm[cm.index >= pd.Timestamp(month_start_str)]
+            if not cur_month.empty:
+                base_row = pre_month.iloc[-1] if not pre_month.empty else cur_month.iloc[0]
+                last_row = cur_month.iloc[-1]
+                entry_row = cur_month.iloc[0]   # entry = first close of current month
+                for col in cm.columns:
+                    b, l = base_row.get(col), last_row.get(col)
+                    if pd.notna(b) and pd.notna(l) and b > 0:
+                        mtd_chg[col] = round((l / b - 1) * 100, 2)
+                    e = entry_row.get(col)
+                    if pd.notna(e) and pd.notna(l) and e > 0:
+                        entry_prices[col] = round(float(e), 2)
+                mtd_base = str(base_row.name)[:10] if not pre_month.empty else str(cur_month.index[0])[:10]
 
-            if not pre_month.empty and not cur_month.empty:
-                base_vals = pre_month.apply(
-                    lambda col: col.dropna().iloc[-1] if col.notna().any() else float("nan"))
-                last_vals = cur_month.apply(
-                    lambda col: col.dropna().iloc[-1] if col.notna().any() else float("nan"))
-            elif not cur_month.empty:
-                # No pre-month data — fall back to first vs last within month
-                base_vals = cur_month.apply(
-                    lambda col: col.dropna().iloc[0] if col.notna().any() else float("nan"))
-                last_vals = cur_month.apply(
-                    lambda col: col.dropna().iloc[-1] if col.notna().any() else float("nan"))
-            else:
-                base_vals = last_vals = pd.Series(dtype=float)
-
-            if not base_vals.empty:
-                pct_m = (last_vals / base_vals - 1) * 100
-                mtd_chg = {col: round(float(pct_m[col]), 2)
-                           for col in pct_m.index if not pd.isna(pct_m[col])}
-
-        return day_chg, mtd_chg, c5, cm
+        return day_chg, mtd_chg, cm, mtd_base, entry_prices
 
     loop = asyncio.get_event_loop()
-    changes, mtd, c5, cm = await loop.run_in_executor(_executor, _fetch)
+    changes, mtd, cm, mtd_base_date, entry_prices = await loop.run_in_executor(_executor, _fetch)
 
     def _port_avg(tickers, src):
         vals = [src[t] for t in tickers if t in src]
         return round(float(np.mean(vals)), 2) if vals else None
 
-    # Date labels
-    def _closes(df):
-        if isinstance(df.columns, pd.MultiIndex):
-            return df["Close"].squeeze() if "Close" in df.columns.get_level_values(0) else pd.Series(dtype=float)
-        return df.squeeze() if not df.empty else pd.Series(dtype=float)
-
-    b5 = c5["^CRSLDX"].dropna() if "^CRSLDX" in c5.columns else pd.Series(dtype=float)
-    as_of = str(b5.index[-1])[:10] if len(b5) >= 1 else ""
-    prev  = str(b5.index[-2])[:10] if len(b5) >= 2 else ""
     bm    = cm["^CRSLDX"].dropna() if "^CRSLDX" in cm.columns else pd.Series(dtype=float)
-    # Show the actual first trading day of the current month (not pre-month rows)
-    bm_cur = bm[bm.index >= pd.Timestamp(month_start_str)] if not bm.empty else bm
-    month_start_actual = str(bm_cur.index[0])[:10] if len(bm_cur) >= 1 else month_start_str
+    as_of = str(bm.index[-1])[:10] if len(bm) >= 1 else ""
+    prev  = str(bm.index[-2])[:10] if len(bm) >= 2 else ""
 
     return {
         "nifty500":        changes.get("^CRSLDX"),
@@ -478,7 +518,9 @@ async def portfolio_daily_change():
                                for t in set(min_tickers_mtd) | set(min_tickers_now) if mtd.get(t) is not None},
         "mtd_mom_stocks":     {t.replace(".NS",""): mtd.get(t)
                                for t in set(mom_tickers_mtd) | set(mom_tickers_now) if mtd.get(t) is not None},
-        "month_start_date":   month_start_actual,
+        "month_start_date":   mtd_base_date,
+        "entry_prices":       {t.replace(".NS",""): entry_prices.get(t)
+                               for t in set(min_tickers_now) | set(mom_tickers_now) if entry_prices.get(t) is not None},
     }
 
 
@@ -491,12 +533,15 @@ def portfolio_strategies():
         rh_min = _min_bt_cache.get("rebalance_history", [])
         if rh_min:
             last_min = rh_min[-1]
-            # Build RS rating and price lookup from current_screen
             screen_map = {s["symbol"]: s for s in _min_bt_cache.get("current_screen", [])}
+            # Prefer the executed snapshot (what you actually hold); else backtest pick.
+            snapshot = _load_held().get("minervini", {})
+            tickers  = snapshot.get("holdings") or last_min.get("holdings", [])
+            as_of    = snapshot.get("as_of") or last_min.get("date")
             holdings = []
-            for sym_ns in last_min.get("holdings", []):
+            for sym_ns in tickers:
                 sym = sym_ns.replace(".NS", "")
-                sc = screen_map.get(sym, {})
+                sc  = screen_map.get(sym, {})
                 holdings.append({
                     "symbol":    sym,
                     "ticker":    sym_ns,
@@ -504,7 +549,7 @@ def portfolio_strategies():
                     "price":     sc.get("price"),
                 })
             result["minervini"] = {
-                "as_of":    last_min.get("date"),
+                "as_of":    as_of,
                 "holdings": holdings,
             }
 
@@ -850,6 +895,8 @@ class OrderParams(BaseModel):
     to_buy:             list  = []
     to_sell:            list  = []
     capital_per_stock:  float = 0
+    strategy:           str   = ""     # "minervini" | "momentum" — for snapshot
+    mode:               str   = ""     # "fresh" | "rebalance"
 
 
 @app.post("/api/orders/preview")
@@ -878,12 +925,28 @@ async def orders_execute(params: OrderParams):
         raise HTTPException(401, status.get("reason", "Kite not connected"))
     loop = asyncio.get_event_loop()
     try:
-        return await loop.run_in_executor(
+        res = await loop.run_in_executor(
             _executor,
             lambda: ko.execute(params.to_buy, params.to_sell, params.capital_per_stock),
         )
     except KiteException as e:
         raise HTTPException(403, str(e))
+
+    # Snapshot what actually filled — only successfully PLACED buys are "held".
+    if params.strategy:
+        placed_buys = [r["symbol"] + ".NS" for r in res.get("results", [])
+                       if r.get("action") == "BUY" and r.get("status") == "placed"]
+        if params.mode == "rebalance":
+            sold = {r["symbol"] for r in res.get("results", [])
+                    if r.get("action") == "SELL" and r.get("status") == "placed"}
+            prev = [t for t in _held_holdings(params.strategy)
+                    if t.replace(".NS", "") not in sold]
+            new_holdings = list(dict.fromkeys(prev + placed_buys))
+        else:  # fresh start
+            new_holdings = placed_buys
+        _save_held(params.strategy, new_holdings, str(date.today()))
+
+    return res
 
 
 # ── Report status ────────────────────────────────────────────────────────────

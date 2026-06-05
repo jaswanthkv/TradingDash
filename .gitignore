@@ -5,3 +5,4 @@ scans/
 .env
 tradeboard.db
 .bt_cache_ml.json
+held_portfolio.json

@@ -362,17 +362,21 @@ html{scroll-behavior:smooth}
 .section-divider{display:flex;align-items:center;gap:12px;padding:16px 20px 8px;
   font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.12em}
 .section-divider::after{content:'';flex:1;height:1px;background:var(--border)}
-/* day-bar: portfolio performance comparison strip */
-.day-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px}
-.day-bar-row{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:10px 0}
-.day-bar-row+.day-bar-row{border-top:1px solid var(--border-inner)}
-.day-bar-label{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;
-  letter-spacing:.07em;width:90px;flex-shrink:0}
-.day-bar-sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
-.day-bar-item{display:flex;align-items:center;gap:6px}
-.day-bar-name{font-size:11px;font-weight:600;color:var(--t2)}
-.day-bar-val{font-size:15px;font-weight:800;color:var(--t1)}
-.day-bar-diff{font-size:11px;color:var(--t3)}
+/* portfolio performance cards */
+.perf-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+.perf-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px}
+.perf-card-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.perf-card-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3)}
+.perf-card-date{font-size:10px;color:var(--t3)}
+.perf-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0}
+.perf-row+.perf-row{border-top:1px solid var(--border-inner)}
+.perf-name{font-size:12px;font-weight:600;color:var(--t2)}
+.perf-right{display:flex;align-items:center;gap:8px}
+.perf-val{font-size:15px;font-weight:800;color:var(--t1)}
+.perf-alpha{font-size:11px;color:var(--t3)}
+/* hide symbols mode */
+.symbols-hidden .sym-cell{filter:blur(5px);user-select:none;pointer-events:none}
+/* edit holdings mode */
 
 </style>
 </head>
@@ -525,6 +529,7 @@ html{scroll-behavior:smooth}
     <span id="portLastUpd" class="d" style="font-size:11px">—</span>
     <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
       <span id="portRebalBadge" class="rebal-badge" style="display:none"></span>
+      <button class="btn btn-ghost btn-sm" id="btnHideSymbols" onclick="toggleHideSymbols()" title="Hide stock names">👁 Hide Names</button>
       <button class="btn btn-ghost btn-sm" onclick="loadPortfolio(true)">↻ Refresh</button>
     </span>
   </div>
@@ -559,47 +564,58 @@ html{scroll-behavior:smooth}
   <div id="portContent" class="hidden">
 
     <!-- Performance comparison bar -->
-    <div id="portDayBar" class="day-bar" style="padding:0 20px">
-      <div class="day-bar-row">
-        <span class="day-bar-label">Last Session</span>
-        <span id="dayAsOf" style="font-size:11px;color:var(--t3)"></span>
-        <div class="day-bar-item">
-          <span class="day-bar-name">Nifty 500</span>
-          <span id="dayN500" class="day-bar-val">—</span>
+    <!-- Performance comparison cards -->
+    <div id="portDayBar" class="perf-grid">
+      <div class="perf-card">
+        <div class="perf-card-head">
+          <span class="perf-card-label">Today</span>
+          <span id="dayAsOf" class="perf-card-date"></span>
         </div>
-        <div class="day-bar-sep"></div>
-        <div class="day-bar-item">
-          <span class="day-bar-name" style="color:#f59e0b">Trend Breakout</span>
-          <span id="dayMin" class="day-bar-val">—</span>
-          <span id="dayMinDiff" class="day-bar-diff"></span>
+        <div class="perf-row">
+          <span class="perf-name">Nifty 500</span>
+          <div class="perf-right"><span id="dayN500" class="perf-val">—</span></div>
         </div>
-        <div class="day-bar-sep"></div>
-        <div class="day-bar-item">
-          <span class="day-bar-name" style="color:#0891b2">Momentum</span>
-          <span id="dayMom" class="day-bar-val">—</span>
-          <span id="dayMomDiff" class="day-bar-diff"></span>
+        <div class="perf-row">
+          <span class="perf-name" style="color:#f59e0b">Trend Breakout</span>
+          <div class="perf-right">
+            <span id="dayMin" class="perf-val">—</span>
+            <span id="dayMinDiff" class="perf-alpha"></span>
+          </div>
+        </div>
+        <div class="perf-row">
+          <span class="perf-name" style="color:#0891b2">Momentum</span>
+          <div class="perf-right">
+            <span id="dayMom" class="perf-val">—</span>
+            <span id="dayMomDiff" class="perf-alpha"></span>
+          </div>
         </div>
       </div>
-      <div class="day-bar-row">
-        <span class="day-bar-label">Current Month</span>
-        <span id="mtdAsOf" style="font-size:11px;color:var(--t3)"></span>
-        <div class="day-bar-item">
-          <span class="day-bar-name">Nifty 500</span>
-          <span id="mtdN500" class="day-bar-val">—</span>
+      <div class="perf-card">
+        <div class="perf-card-head">
+          <span class="perf-card-label">This Month</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="mtdAsOf" class="perf-card-date"></span>
+            <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px" onclick="loadDayChange()">↻</button>
+          </div>
         </div>
-        <div class="day-bar-sep"></div>
-        <div class="day-bar-item">
-          <span class="day-bar-name" style="color:#f59e0b">Trend Breakout</span>
-          <span id="mtdMin" class="day-bar-val">—</span>
-          <span id="mtdMinDiff" class="day-bar-diff"></span>
+        <div class="perf-row">
+          <span class="perf-name">Nifty 500</span>
+          <div class="perf-right"><span id="mtdN500" class="perf-val">—</span></div>
         </div>
-        <div class="day-bar-sep"></div>
-        <div class="day-bar-item">
-          <span class="day-bar-name" style="color:#0891b2">Momentum</span>
-          <span id="mtdMom" class="day-bar-val">—</span>
-          <span id="mtdMomDiff" class="day-bar-diff"></span>
+        <div class="perf-row">
+          <span class="perf-name" style="color:#f59e0b">Trend Breakout</span>
+          <div class="perf-right">
+            <span id="mtdMin" class="perf-val">—</span>
+            <span id="mtdMinDiff" class="perf-alpha"></span>
+          </div>
         </div>
-        <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadDayChange()">↻</button>
+        <div class="perf-row">
+          <span class="perf-name" style="color:#0891b2">Momentum</span>
+          <div class="perf-right">
+            <span id="mtdMom" class="perf-val">—</span>
+            <span id="mtdMomDiff" class="perf-alpha"></span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -623,6 +639,7 @@ html{scroll-behavior:smooth}
                   <th style="text-align:left">Symbol</th>
                   <th>RS Rating</th>
                   <th>Price (₹)</th>
+                  <th>Entry (₹)</th>
                   <th>Today %</th>
                   <th>Month %</th>
                 </tr></thead>
@@ -648,13 +665,13 @@ html{scroll-behavior:smooth}
                 <thead><tr>
                   <th style="text-align:left">Symbol</th>
                   <th>Status</th>
+                  <th>Entry (₹)</th>
                   <th>Today %</th>
                   <th>Month %</th>
                 </tr></thead>
                 <tbody id="momPortBody"></tbody>
               </table>
             </div>
-            <div id="momPortChanges" style="padding:10px 16px;border-top:1px solid var(--border-inner);font-size:11px;color:var(--t2)"></div>
           </div>
         </div>
 
@@ -1518,13 +1535,12 @@ function _pctHtml(v) {
 function renderDayChange(d) {
   const fmt = dt => new Date(dt).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
 
-  // ── Last Session ───────────────────────────────────────────────────────
+  // ── Today ──────────────────────────────────────────────────────────────
   const n500 = d.nifty500, min = d.min_portfolio, mom = d.mom_portfolio;
   document.getElementById('dayN500').innerHTML = _pctHtml(n500);
   document.getElementById('dayMin').innerHTML  = _pctHtml(min);
   document.getElementById('dayMom').innerHTML  = _pctHtml(mom);
-  if (d.as_of)
-    setText('dayAsOf', `(${fmt(d.prev_close_date)} → ${fmt(d.as_of)})`);
+  if (d.as_of) setText('dayAsOf', fmt(d.as_of));
   if (n500 != null && min != null) {
     const diff = min - n500;
     document.getElementById('dayMinDiff').innerHTML =
@@ -1536,13 +1552,13 @@ function renderDayChange(d) {
       `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
   }
 
-  // ── Current Month ──────────────────────────────────────────────────────
+  // ── This Month ─────────────────────────────────────────────────────────
   const mn500 = d.mtd_nifty500, mmin = d.mtd_min_portfolio, mmom = d.mtd_mom_portfolio;
   document.getElementById('mtdN500').innerHTML = _pctHtml(mn500);
   document.getElementById('mtdMin').innerHTML  = _pctHtml(mmin);
   document.getElementById('mtdMom').innerHTML  = _pctHtml(mmom);
   if (d.month_start_date && d.as_of)
-    setText('mtdAsOf', `(${fmt(d.month_start_date)} → ${fmt(d.as_of)})`);
+    setText('mtdAsOf', `${fmt(d.month_start_date)} → ${fmt(d.as_of)}`);
   if (mn500 != null && mmin != null) {
     const diff = mmin - mn500;
     document.getElementById('mtdMinDiff').innerHTML =
@@ -1554,23 +1570,31 @@ function renderDayChange(d) {
       `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
   }
 
-  // ── Per-stock Today % and Month % ──────────────────────────────────────
-  const minStocks = d.min_stocks    || {};
-  const minMtd    = d.mtd_min_stocks || {};
-  const momStocks = d.mom_stocks    || {};
-  const momMtd    = d.mtd_mom_stocks || {};
+  // ── Per-stock entry price, today %, month % ────────────────────────────
+  const minStocks   = d.min_stocks      || {};
+  const minMtd      = d.mtd_min_stocks  || {};
+  const momStocks   = d.mom_stocks      || {};
+  const momMtd      = d.mtd_mom_stocks  || {};
+  const entryPrices = d.entry_prices    || {};
 
+  const _inrHtml = v => v == null ? '<span class="d">—</span>'
+    : `<span class="sym-cell">₹${v.toLocaleString('en-IN',{maximumFractionDigits:2})}</span>`;
+
+  // Trend Breakout: Symbol(0) RS(1) Price(2) Entry(3) Today(4) Month(5)
   document.querySelectorAll('#minPortBody tr').forEach(tr => {
     const sym = tr.dataset.sym;
     if (!sym) return;
-    if (tr.cells[3]) tr.cells[3].innerHTML = _pctHtml(minStocks[sym] ?? null);
-    if (tr.cells[4]) tr.cells[4].innerHTML = _pctHtml(minMtd[sym]    ?? null);
+    if (tr.cells[3]) tr.cells[3].innerHTML = _inrHtml(entryPrices[sym] ?? null);
+    if (tr.cells[4]) tr.cells[4].innerHTML = _pctHtml(minStocks[sym]   ?? null);
+    if (tr.cells[5]) tr.cells[5].innerHTML = _pctHtml(minMtd[sym]      ?? null);
   });
+  // Momentum: Symbol(0) Status(1) Entry(2) Today(3) Month(4)
   document.querySelectorAll('#momPortBody tr').forEach(tr => {
     const sym = tr.dataset.sym;
     if (!sym) return;
-    if (tr.cells[2]) tr.cells[2].innerHTML = _pctHtml(momStocks[sym] ?? null);
-    if (tr.cells[3]) tr.cells[3].innerHTML = _pctHtml(momMtd[sym]    ?? null);
+    if (tr.cells[2]) tr.cells[2].innerHTML = _inrHtml(entryPrices[sym] ?? null);
+    if (tr.cells[3]) tr.cells[3].innerHTML = _pctHtml(momStocks[sym]   ?? null);
+    if (tr.cells[4]) tr.cells[4].innerHTML = _pctHtml(momMtd[sym]      ?? null);
   });
 }
 
@@ -1602,9 +1626,10 @@ function renderPortfolio(d) {
     d.minervini.holdings.forEach(h => {
       const rs = h.rs_rating != null ? h.rs_rating.toFixed(1) : '—';
       tbody.innerHTML += `<tr data-sym="${h.symbol}">
-        <td style="font-weight:600">${h.symbol}</td>
+        <td class="sym-cell" style="font-weight:600">${h.symbol}</td>
         <td><span style="font-weight:700;color:#f59e0b">${rs}</span></td>
-        <td>₹${(h.price||0).toLocaleString('en-IN')}</td>
+        <td class="sym-cell">₹${(h.price||0).toLocaleString('en-IN')}</td>
+        <td class="sym-cell d">—</td>
         <td class="d">—</td>
         <td class="d">—</td>
       </tr>`;
@@ -1624,22 +1649,15 @@ function renderPortfolio(d) {
     d.momentum.holdings.forEach(sym => {
       const isNew = addedSet.has(sym);
       tbody.innerHTML += `<tr data-sym="${sym}">
-        <td style="font-weight:600">${sym}</td>
+        <td class="sym-cell" style="font-weight:600">${sym}</td>
         <td>${isNew
           ? '<span class="chip chip-add">NEW</span>'
           : '<span class="chip chip-hold" style="background:var(--accent-subtle);color:var(--accent-text);border-color:var(--accent-border)">CONT</span>'}</td>
+        <td class="sym-cell d">—</td>
         <td class="d">—</td>
         <td class="d">—</td>
       </tr>`;
     });
-
-    // changes summary
-    const changes = document.getElementById('momPortChanges');
-    const addedHtml   = (d.momentum.added   ||[]).map(s=>`<span class="chip chip-add">+${s}</span>`).join(' ');
-    const removedHtml = (d.momentum.removed ||[]).map(s=>`<span class="chip chip-rem">-${s}</span>`).join(' ');
-    changes.innerHTML = (addedHtml || removedHtml)
-      ? `<span style="color:var(--t3);margin-right:6px">Last rebalance:</span>${removedHtml} ${addedHtml}`
-      : '<span style="color:var(--t3)">No changes at last rebalance</span>';
   } else {
     show('momPortEmpty'); hide('momPortTable');
   }
@@ -2549,7 +2567,8 @@ async function executeOrders(strategy) {
     const res = await fetch(API + '/api/orders/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to_buy: p.to_buy, to_sell: p.to_sell, capital_per_stock: p.capital_per_stock }),
+      body: JSON.stringify({ to_buy: p.to_buy, to_sell: p.to_sell, capital_per_stock: p.capital_per_stock,
+                             strategy: strategy === 'min' ? 'minervini' : 'momentum', mode: p.mode }),
     });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
@@ -2763,11 +2782,13 @@ function renderMinHistory(d) {
     `${log.length} rebalances · avg ${(log.reduce((s,r)=>s+r.qualifying,0)/log.length).toFixed(0)} qualifying stocks/month`;
 
   document.getElementById('minHistList').innerHTML = log.map((r, i) => {
-    const cls = r.period_ret_pct >= 0 ? 'g' : 'r';
+    const ret = r.period_ret_pct;
+    const cls = ret == null ? 'd' : ret >= 0 ? 'g' : 'r';
+    const retStr = ret == null ? '—' : (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%';
     return `<div class="reblog-item" style="cursor:pointer" onclick="showMinDetail(${i})">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div class="reblog-date">${r.date}</div>
-        <div class="${cls}" style="font-weight:700;font-size:12px">${r.period_ret_pct >= 0 ? '+' : ''}${r.period_ret_pct.toFixed(1)}%</div>
+        <div class="${cls}" style="font-weight:700;font-size:12px">${retStr}</div>
       </div>
       <div style="font-size:11px;color:var(--t3)">${r.qualifying} qualifying · ${r.holdings.length} held</div>
     </div>`;
@@ -3052,6 +3073,15 @@ function renderReport() {
 }
 
 // ── Dark mode ─────────────────────────────────────────────────────────────────
+let _symbolsHidden = false;
+function toggleHideSymbols() {
+  _symbolsHidden = !_symbolsHidden;
+  document.getElementById('tab-portfolio').classList.toggle('symbols-hidden', _symbolsHidden);
+  const btn = document.getElementById('btnHideSymbols');
+  btn.textContent = _symbolsHidden ? '👁 Show Names' : '👁 Hide Names';
+  btn.style.color = _symbolsHidden ? 'var(--accent)' : '';
+}
+
 function initDark() {
   const saved = localStorage.getItem('theme') || 'light';
   document.documentElement.setAttribute('data-theme', saved);
