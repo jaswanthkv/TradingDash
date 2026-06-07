@@ -6,3 +6,4 @@ scans/
 tradeboard.db
 .bt_cache_ml.json
 held_portfolio.json
+.mcp.json

@@ -458,14 +458,14 @@ async def portfolio_daily_change():
         cm = cm.dropna(how="all")
         cm.index = pd.to_datetime(cm.index).tz_localize(None)
 
-        # ── Today: last row vs second-to-last ──────────────────────────────
+        # ── Today: each ticker's last two OWN valid closes ─────────────────
+        # Per-column dropna avoids blanks when a ticker (e.g. ^CRSLDX) has a
+        # missing bar on a day other tickers traded.
         day_chg = {}
-        if len(cm) >= 2:
-            last, prev = cm.iloc[-1], cm.iloc[-2]
-            for col in cm.columns:
-                p, l = prev.get(col), last.get(col)
-                if pd.notna(p) and pd.notna(l) and p > 0:
-                    day_chg[col] = round((l / p - 1) * 100, 2)
+        for col in cm.columns:
+            series = cm[col].dropna()
+            if len(series) >= 2 and series.iloc[-2] > 0:
+                day_chg[col] = round((series.iloc[-1] / series.iloc[-2] - 1) * 100, 2)
 
         # ── MTD: last close of previous month → today ──────────────────────
         mtd_chg    = {}
