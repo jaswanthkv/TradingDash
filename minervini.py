@@ -194,13 +194,21 @@ def run_backtest(
     rebalance_log: list = []
     prev_portfolio: list = []
 
+    # Clean benchmark series (drop NaN bars) — the Nifty 500 index has data gaps
+    # on some dates; .asof() then gives the last valid close on/before any date.
+    bench_series = (close[BENCHMARK].dropna()
+                    if BENCHMARK in close.columns else pd.Series(dtype=float))
+
     for i, rd in enumerate(rebalance_dates):
         rd_ts   = pd.Timestamp(rd)
         next_rd = (pd.Timestamp(rebalance_dates[i + 1])
                    if i < len(rebalance_dates) - 1
                    else pd.Timestamp(date.today()))
 
-        avail = close.index[close.index <= rd_ts]
+        # Screen on the last close STRICTLY BEFORE the rebalance date — you form
+        # the portfolio at the start of the rebalance day using prior-session data,
+        # so using the rebalance day's own close would be look-ahead bias.
+        avail = close.index[close.index < rd_ts]
         if avail.empty:
             continue
         dt = avail[-1]
@@ -242,8 +250,10 @@ def run_backtest(
         if idx_gte_rd.empty:
             prev_portfolio = portfolio[:]
             continue
-        entry_row = close.loc[idx_gte_rd[0]]
-        exit_row  = close.loc[idx_gte_next[0]] if not idx_gte_next.empty else close.iloc[-1]
+        entry_date = idx_gte_rd[0]
+        exit_date  = idx_gte_next[0] if not idx_gte_next.empty else close.index[-1]
+        entry_row  = close.loc[entry_date]
+        exit_row   = close.loc[exit_date]
 
         valid = [
             t for t in portfolio
@@ -258,14 +268,15 @@ def run_backtest(
         ind_rets     = (exit_row[valid] / entry_row[valid]) - 1
         port_monthly = float(ind_rets.mean()) - cost
 
-        try:
-            b_entry = entry_row.get(BENCHMARK) if BENCHMARK in close.columns else None
-            b_exit  = exit_row.get(BENCHMARK)  if BENCHMARK in close.columns else None
-            bench_monthly = float(b_exit / b_entry - 1) \
-                if (b_entry and b_exit and b_entry > 0 and math.isfinite(b_exit / b_entry)) \
-                else 0.0
-        except Exception:
-            bench_monthly = 0.0
+        # Benchmark return via nearest valid close on/before entry & exit dates
+        # (handles ^CRSLDX gaps that previously zeroed out the benchmark).
+        bench_monthly = 0.0
+        if not bench_series.empty:
+            b_entry = bench_series.asof(entry_date)
+            b_exit  = bench_series.asof(exit_date)
+            if pd.notna(b_entry) and pd.notna(b_exit) and b_entry > 0 \
+               and math.isfinite(b_exit / b_entry):
+                bench_monthly = float(b_exit / b_entry - 1)
 
         label = rd_ts.strftime("%Y-%m")
         port_returns[label]  = port_monthly

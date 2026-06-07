@@ -1,5 +1,5 @@
 """
-config.py — Configuration for the ML Strategy dashboard.
+config.py — Configuration for the QuantDesk dashboard.
 """
 import os
 

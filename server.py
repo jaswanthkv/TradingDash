@@ -1,18 +1,8 @@
 """
-server.py — FastAPI backend for the ML Strategy dashboard.
+server.py — FastAPI backend for the QuantDesk dashboard.
 
 Endpoints:
   GET  /                              — dashboard (index.html)
-
-  POST /api/ml/backtest/run           — launch walk-forward ML backtest (~60–90s)
-  GET  /api/ml/backtest/result        — latest cached ML backtest result
-  GET  /api/ml/backtest/status        — running / has_result
-  GET  /api/ml/backtest/history       — all past ML runs (params + timestamp)
-  GET  /api/ml/rank                   — current ML rankings (cached 5 min)
-
-  POST /api/momentum/backtest/run     — launch momentum backtest (~30–60s)
-  GET  /api/momentum/backtest/result  — latest cached momentum backtest result
-  GET  /api/momentum/backtest/status  — running / has_result
 
   POST /api/minervini/backtest/run    — launch Minervini SEPA backtest
   GET  /api/minervini/backtest/result — latest cached Minervini backtest result
@@ -85,6 +75,11 @@ def _held_holdings(strategy: str) -> list:
     return _load_held().get(strategy, {}).get("holdings", [])
 
 
+def _held_month(strategy: str) -> str:
+    """Return the YYYY-MM the snapshot represents (from its as_of date), or ''."""
+    return _load_held().get(strategy, {}).get("as_of", "")[:7]
+
+
 def _strip_partial_month(result: dict) -> dict:
     """Null out the current (partial) month from monthly_returns/monthly_bench grids."""
     if not result:
@@ -114,22 +109,9 @@ def _strip_partial_month(result: dict) -> dict:
 
 
 # In-memory caches — seeded from DB on startup
-_ml_bt_cache: dict    = db.get_latest_backtest(strategy="ml")
-_ml_bt_running: bool  = False
-_ml_bt_progress: dict = {"step": 0, "total": 6, "msg": ""}
-
-_mom_bt_cache: dict    = db.get_latest_backtest(strategy="momentum")
-_mom_bt_running: bool  = False
-_mom_bt_progress: dict = {"step": 0, "total": 5, "msg": ""}
-
 _min_bt_cache: dict    = db.get_latest_backtest(strategy="minervini")
 _min_bt_running: bool  = False
 _min_bt_progress: dict = {"step": 0, "total": 5, "msg": ""}
-
-
-_ml_rank_cache: dict = db.get_latest_rank_snapshot()
-_ml_rank_ts:    float = 0.0   # force a fresh fetch on first request
-_ML_RANK_TTL    = 300         # seconds
 
 # ── Auto-refresh helpers ─────────────────────────────────────────────────────
 
@@ -144,25 +126,6 @@ def _is_stale(cache: dict) -> bool:
         return run_date.year != now.year or run_date.month != now.month
     except Exception:
         return True
-
-
-def _bg_run_momentum(m: int = 8, x: int = 3, years: int = 10):
-    global _mom_bt_running, _mom_bt_cache, _mom_bt_progress
-    if _mom_bt_running:
-        return
-    import backtest as bt
-    _mom_bt_running = True
-    _mom_bt_progress = {"step": 0, "total": 5, "msg": "Auto-refresh…"}
-    def _cb(step, total, msg):
-        _mom_bt_progress.update({"step": step, "total": total, "msg": msg})
-    try:
-        result = bt.run_backtest(m=m, x=x, years=years, progress_cb=_cb)
-        _mom_bt_cache = result
-        db.save_backtest(years, m, x, result, strategy="momentum")
-    except Exception as e:
-        print(f"[auto-refresh] momentum failed: {e}")
-    finally:
-        _mom_bt_running = False
 
 
 def _bg_run_minervini(years: int = 5, top_n: int = 20, cost_bps: float = 20):
@@ -185,11 +148,8 @@ def _bg_run_minervini(years: int = 5, top_n: int = 20, cost_bps: float = 20):
 
 
 def _startup_auto_refresh():
-    """Run once 30 s after boot — re-runs any backtest not updated this month."""
+    """Run once 30 s after boot — re-runs the backtest if not updated this month."""
     time.sleep(30)
-    if _is_stale(_mom_bt_cache) and not _mom_bt_running:
-        print("[auto-refresh] momentum backtest is stale — starting background run")
-        _bg_run_momentum()
     if _is_stale(_min_bt_cache) and not _min_bt_running:
         print("[auto-refresh] minervini backtest is stale — starting background run")
         _bg_run_minervini()
@@ -205,125 +165,6 @@ _pulse_auto_log:      list        = []
 _pulse_auto_lots:     int         = 1
 _pulse_auto_thread:   threading.Thread | None = None
 _IST                              = ZoneInfo("Asia/Kolkata")
-
-
-# ── ML backtest ───────────────────────────────────────────────────────────────
-
-class MLBacktestParams(BaseModel):
-    years:    int   = 5
-    top_n:    int   = 20
-    cost_bps: float = 20
-
-
-@app.post("/api/ml/backtest/run")
-async def ml_backtest_run(params: MLBacktestParams):
-    global _ml_bt_running
-    if _ml_bt_running:
-        raise HTTPException(409, "ML backtest already running")
-    import backtest_ml as btml
-
-    def _run():
-        global _ml_bt_running, _ml_bt_cache, _ml_bt_progress
-        _ml_bt_running = True
-        _ml_bt_progress = {"step": 0, "total": 6, "msg": "Starting…"}
-        def _on_progress(step, total, msg):
-            _ml_bt_progress.update({"step": step, "total": total, "msg": msg})
-        try:
-            result = btml.run_backtest(
-                years=params.years, top_n=params.top_n, cost_bps=params.cost_bps,
-                progress_cb=_on_progress,
-            )
-            _ml_bt_cache = result
-            db.save_backtest(params.years, params.top_n, params.cost_bps, result, strategy="ml")
-            return result
-        finally:
-            _ml_bt_running = False
-
-    loop   = asyncio.get_event_loop()
-    result = await loop.run_in_executor(_executor, _run)
-    return result
-
-
-@app.get("/api/ml/backtest/result")
-def ml_backtest_result():
-    if not _ml_bt_cache:
-        raise HTTPException(404, "No backtest result yet — run one first")
-    return _ml_bt_cache
-
-
-@app.get("/api/ml/backtest/status")
-def ml_backtest_status():
-    return {"running": _ml_bt_running, "has_result": bool(_ml_bt_cache),
-            "progress": _ml_bt_progress}
-
-
-@app.get("/api/ml/backtest/history")
-def ml_backtest_history():
-    return db.list_backtest_runs()
-
-
-# ── ML rankings ───────────────────────────────────────────────────────────────
-
-@app.get("/api/ml/rank")
-async def ml_rank(years: int = 3):
-    global _ml_rank_cache, _ml_rank_ts
-    if _ml_rank_cache and (time.time() - _ml_rank_ts) < _ML_RANK_TTL:
-        return _ml_rank_cache
-    import strategy as strat
-    loop   = asyncio.get_event_loop()
-    result = await loop.run_in_executor(_executor, lambda: strat.get_current_rankings(years))
-    _ml_rank_cache = result
-    _ml_rank_ts    = time.time()
-    db.save_rank_snapshot(result)
-    return result
-
-
-# ── Momentum backtest ─────────────────────────────────────────────────────────
-
-class MomentumParams(BaseModel):
-    m:     int = 8
-    x:     int = 3
-    years: int = 10
-
-
-@app.post("/api/momentum/backtest/run")
-async def momentum_backtest_run(params: MomentumParams):
-    global _mom_bt_running
-    if _mom_bt_running:
-        raise HTTPException(409, "Momentum backtest already running")
-    import backtest as bt
-
-    def _run():
-        global _mom_bt_running, _mom_bt_cache, _mom_bt_progress
-        _mom_bt_running = True
-        _mom_bt_progress = {"step": 0, "total": 5, "msg": "Starting…"}
-        def _on_progress(step, total, msg):
-            _mom_bt_progress.update({"step": step, "total": total, "msg": msg})
-        try:
-            result = bt.run_backtest(m=params.m, x=params.x, years=params.years,
-                                     progress_cb=_on_progress)
-            _mom_bt_cache = result
-            db.save_backtest(params.years, params.m, params.x, result, strategy="momentum")
-            return result
-        finally:
-            _mom_bt_running = False
-
-    loop   = asyncio.get_event_loop()
-    result = await loop.run_in_executor(_executor, _run)
-    return _strip_partial_month(result)
-
-
-@app.get("/api/momentum/backtest/result")
-def momentum_backtest_result():
-    if not _mom_bt_cache:
-        raise HTTPException(404, "No momentum backtest result — run one first")
-    return _strip_partial_month(_mom_bt_cache)
-
-
-@app.get("/api/momentum/backtest/status")
-def momentum_backtest_status():
-    return {"running": _mom_bt_running, "has_result": bool(_mom_bt_cache),
-            "progress": _mom_bt_progress}
 
 
 # ── Minervini SEPA backtest ───────────────────────────────────────────────────
@@ -371,10 +212,15 @@ def _minervini_view(cache: dict) -> dict:
     result = _strip_partial_month(cache)
     snap = _held_holdings("minervini")
     rh   = result.get("rebalance_history", [])
-    if snap and rh and rh[-1].get("date") == date.today().strftime("%Y-%m"):
-        rh[-1]["holdings"] = list(snap)
-        rh[-1]["added"]    = []   # current held set — turnover vs algorithm hidden
-        rh[-1]["removed"]  = []
+    # Only lock a rebalance row to the snapshot when the snapshot actually
+    # represents THAT month (as_of month == row month). Before you execute the
+    # new month's orders, the latest row shows the algorithm's fresh picks so
+    # you know what to trade; after you execute, the snapshot updates and locks it.
+    if snap and rh and rh[-1].get("date") == _held_month("minervini"):
+        rh[-1]["holdings"]   = list(snap)
+        rh[-1]["qualifying"] = len(snap)   # reflect what was actually held, not a later re-run
+        rh[-1]["added"]      = []   # current held set — turnover vs algorithm hidden
+        rh[-1]["removed"]    = []
     return result
 
 
@@ -433,12 +279,12 @@ def _next_rebalance() -> dict:
 
 @app.get("/api/portfolio/daily-change")
 async def portfolio_daily_change():
-    """Daily % change for Minervini + Momentum strategy portfolios vs Nifty 500."""
+    """Daily % change for the Trend Breakout strategy portfolio vs Nifty 500."""
     import yfinance as yf
     import numpy as np
 
     # Held holdings: prefer executed snapshot, else last backtest rebalance
-    min_tickers_now, mom_tickers_now = [], []
+    min_tickers_now = []
     if _min_bt_cache:
         rh = _min_bt_cache.get("rebalance_history", [])
         snap = _held_holdings("minervini")
@@ -446,16 +292,10 @@ async def portfolio_daily_change():
             min_tickers_now = snap
         elif rh:
             min_tickers_now = rh[-1].get("holdings", [])
-    if _mom_bt_cache:
-        rh = _mom_bt_cache.get("rebalance_history", [])
-        if rh:
-            mom_tickers_now = rh[-1].get("holdings", [])
 
     min_tickers_mtd = min_tickers_now
-    mom_tickers_mtd = mom_tickers_now
 
-    all_tickers = list(set(min_tickers_now + mom_tickers_now +
-                           min_tickers_mtd + mom_tickers_mtd + ["^CRSLDX"]))
+    all_tickers = list(set(min_tickers_now + min_tickers_mtd + ["^CRSLDX"]))
     from datetime import date as _date, timedelta as _td
     today       = _date.today()
     month_start = today.replace(day=1)
@@ -518,30 +358,24 @@ async def portfolio_daily_change():
     return {
         "nifty500":        changes.get("^CRSLDX"),
         "min_portfolio":   _port_avg(min_tickers_now, changes),
-        "mom_portfolio":   _port_avg(mom_tickers_now, changes),
         "min_stocks":      {t.replace(".NS",""): changes.get(t)
                             for t in set(min_tickers_now) | set(min_tickers_mtd) if changes.get(t) is not None},
-        "mom_stocks":      {t.replace(".NS",""): changes.get(t)
-                            for t in set(mom_tickers_now) | set(mom_tickers_mtd) if changes.get(t) is not None},
         "as_of":           as_of,
         "prev_close_date": prev,
         "mtd_nifty500":       mtd.get("^CRSLDX"),
         "mtd_min_portfolio":  _port_avg(min_tickers_mtd, mtd),
-        "mtd_mom_portfolio":  _port_avg(mom_tickers_mtd, mtd),
         "mtd_min_stocks":     {t.replace(".NS",""): mtd.get(t)
                                for t in set(min_tickers_mtd) | set(min_tickers_now) if mtd.get(t) is not None},
-        "mtd_mom_stocks":     {t.replace(".NS",""): mtd.get(t)
-                               for t in set(mom_tickers_mtd) | set(mom_tickers_now) if mtd.get(t) is not None},
         "month_start_date":   mtd_base_date,
         "entry_prices":       {t.replace(".NS",""): entry_prices.get(t)
-                               for t in set(min_tickers_now) | set(mom_tickers_now) if entry_prices.get(t) is not None},
+                               for t in set(min_tickers_now) if entry_prices.get(t) is not None},
     }
 
 
 @app.get("/api/portfolio/strategies")
 def portfolio_strategies():
-    """Current Minervini + Momentum strategy picks — no Kite required."""
-    result = {"minervini": None, "momentum": None, "next_rebalance": _next_rebalance()}
+    """Current Trend Breakout strategy picks — no Kite required."""
+    result = {"minervini": None, "next_rebalance": _next_rebalance()}
 
     if _min_bt_cache:
         rh_min = _min_bt_cache.get("rebalance_history", [])
@@ -567,17 +401,6 @@ def portfolio_strategies():
                 "holdings": holdings,
             }
 
-    if _mom_bt_cache:
-        rh = _mom_bt_cache.get("rebalance_history", [])
-        if rh:
-            last = rh[-1]
-            result["momentum"] = {
-                "as_of":    last.get("date"),
-                "holdings": [t.replace(".NS", "") for t in last.get("holdings", [])],
-                "added":    [t.replace(".NS", "") for t in last.get("added", [])],
-                "removed":  [t.replace(".NS", "") for t in last.get("removed", [])],
-            }
-
     return result
 
 
@@ -594,13 +417,6 @@ def portfolio_live():
                 "total_invested": 0, "total_value": 0, "total_pnl": 0,
                 "total_pnl_pct": 0, "day_change": 0, "count": 0,
             }, "next_rebalance": _next_rebalance(), "exit_candidates": []}
-
-        # Build rank map from cached ML rankings
-        rank_map, portfolio_set = {}, set()
-        if _ml_rank_cache:
-            for r in _ml_rank_cache.get("rankings", []):
-                rank_map[r["ticker"].replace(".NS", "")] = r.get("rank", 999)
-            portfolio_set = {t.replace(".NS", "") for t in _ml_rank_cache.get("portfolio", [])}
 
         holdings, total_invested, total_value, total_day_pnl = [], 0, 0, 0
         for sym, h in holdings_map.items():
@@ -621,15 +437,12 @@ def portfolio_live():
                 "invested": invested, "value": value,
                 "pnl": round(value - invested, 2), "pnl_pct": pnl_pct,
                 "day_change": round(day_chg, 2), "day_change_pct": round(day_chg_p, 2),
-                "ml_rank": rank_map.get(sym),
-                "in_portfolio": sym in portfolio_set if portfolio_set else None,
             })
 
         holdings.sort(key=lambda x: x["value"], reverse=True)
         total_pnl     = round(total_value - total_invested, 2)
         total_pnl_pct = round(total_pnl / total_invested * 100, 2) if total_invested else 0
-        exit_candidates = [h["symbol"] for h in holdings
-                           if portfolio_set and not h["in_portfolio"]]
+        exit_candidates = []
         return {
             "connected": True,
             "holdings": holdings,
@@ -909,7 +722,7 @@ class OrderParams(BaseModel):
     to_buy:             list  = []
     to_sell:            list  = []
     capital_per_stock:  float = 0
-    strategy:           str   = ""     # "minervini" | "momentum" — for snapshot
+    strategy:           str   = ""     # "minervini" — for snapshot
     mode:               str   = ""     # "fresh" | "rebalance"
 
 
@@ -968,9 +781,7 @@ async def orders_execute(params: OrderParams):
 @app.get("/api/report/status")
 def report_refresh_status():
     return {
-        "momentum_running":  _mom_bt_running,
         "minervini_running": _min_bt_running,
-        "momentum_stale":    _is_stale(_mom_bt_cache),
         "minervini_stale":   _is_stale(_min_bt_cache),
     }
 
@@ -1028,7 +839,6 @@ def monthly_report():
         }
 
     cards = [
-        _card("Multi-Factor Momentum", _mom_bt_cache, "#6366f1"),
         _card("Trend Breakout",        _min_bt_cache, "#f59e0b"),
     ]
 

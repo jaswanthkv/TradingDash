@@ -458,7 +458,6 @@ html{scroll-behavior:smooth}
 <div class="tab-bar">
   <button class="tab active" onclick="switchTab('home',this)">Home</button>
   <button class="tab" onclick="switchTab('portfolio',this)" id="tabPortfolio">Portfolio</button>
-  <button class="tab" onclick="switchTab('momentum',this)">Momentum</button>
   <button class="tab" onclick="switchTab('minervini',this)">Trend Breakout</button>
   <button class="tab" onclick="switchTab('ha',this)">Pulse</button>
   <button class="tab" onclick="switchTab('report',this)">Report</button>
@@ -474,20 +473,6 @@ html{scroll-behavior:smooth}
   </div>
 
   <div class="strategy-grid">
-
-    <!-- Momentum card -->
-    <div class="s-card" onclick="goToTab('momentum')">
-      <div class="s-card-icon">📈</div>
-      <div class="s-card-name">Multi-Factor Momentum</div>
-      <div class="s-card-desc">A cross-sectional ranking engine scoring every stock in the NSE equity universe across seven quantitative factors — price momentum, relative strength, trend alignment, Sharpe ratio, and volume expansion. Portfolio rebalances monthly into the top 20 ranked names.</div>
-      <div class="s-card-tags">
-        <span class="s-tag">NSE Equities</span>
-        <span class="s-tag">Monthly Rebalance</span>
-        <span class="s-tag">Long-Only</span>
-      </div>
-      <div class="s-sparkline" id="spark-mom"></div>
-      <button class="s-card-cta">View Strategy →</button>
-    </div>
 
     <!-- Pulse (HA) Strategy card -->
     <div class="s-card" onclick="goToTab('ha')">
@@ -557,7 +542,7 @@ html{scroll-behavior:smooth}
   <div id="portError" class="empty hidden">
     <div class="empty-icon">⚠️</div>
     <div class="empty-title" id="portErrorMsg">Something went wrong</div>
-    <div class="empty-sub">Run Trend Breakout and Momentum backtest first, then refresh.</div>
+    <div class="empty-sub">Run the Trend Breakout backtest first, then refresh.</div>
   </div>
 
   <!-- content -->
@@ -582,13 +567,6 @@ html{scroll-behavior:smooth}
             <span id="dayMinDiff" class="perf-alpha"></span>
           </div>
         </div>
-        <div class="perf-row">
-          <span class="perf-name" style="color:#0891b2">Momentum</span>
-          <div class="perf-right">
-            <span id="dayMom" class="perf-val">—</span>
-            <span id="dayMomDiff" class="perf-alpha"></span>
-          </div>
-        </div>
       </div>
       <div class="perf-card">
         <div class="perf-card-head">
@@ -609,18 +587,11 @@ html{scroll-behavior:smooth}
             <span id="mtdMinDiff" class="perf-alpha"></span>
           </div>
         </div>
-        <div class="perf-row">
-          <span class="perf-name" style="color:#0891b2">Momentum</span>
-          <div class="perf-right">
-            <span id="mtdMom" class="perf-val">—</span>
-            <span id="mtdMomDiff" class="perf-alpha"></span>
-          </div>
-        </div>
       </div>
     </div>
 
     <div class="page">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div style="display:grid;grid-template-columns:1fr;gap:16px">
 
         <!-- Minervini SEPA card -->
         <div class="card">
@@ -649,172 +620,10 @@ html{scroll-behavior:smooth}
           </div>
         </div>
 
-        <!-- Momentum Strategy card -->
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">📈 Momentum Strategy</span>
-            <span id="momPortAsOf" class="d" style="font-size:11px">—</span>
-          </div>
-          <div id="momPortEmpty" class="empty" style="padding:24px">
-            <div class="empty-title" style="font-size:13px">No momentum backtest yet</div>
-            <div class="empty-sub">Go to Momentum and run backtest first.</div>
-          </div>
-          <div id="momPortTable" class="hidden">
-            <div class="tbl-wrap" style="max-height:420px">
-              <table>
-                <thead><tr>
-                  <th style="text-align:left">Symbol</th>
-                  <th>Status</th>
-                  <th>Entry (₹)</th>
-                  <th>Today %</th>
-                  <th>Month %</th>
-                </tr></thead>
-                <tbody id="momPortBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
   </div>
 
-</div>
-
-<!-- ════════════════════ MOMENTUM TAB ════════════════════ -->
-<div class="tab-pane" id="tab-momentum">
-
-  <div class="param-row">
-    <div class="param-group">
-      <label>Holdings</label>
-      <select id="mp-m">
-        <option value="8" selected>8</option>
-        <option value="10">10</option>
-        <option value="15">15</option>
-        <option value="20">20</option>
-      </select>
-    </div>
-    <div class="param-sep">·</div>
-    <div class="param-group">
-      <label>Monthly Rotation</label>
-      <select id="mp-x">
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3" selected>3</option>
-        <option value="5">5</option>
-      </select>
-    </div>
-    <div class="param-sep">·</div>
-    <div class="param-group">
-      <label>Years</label>
-      <select id="mp-years">
-        <option value="5">5 years</option>
-        <option value="7">7 years</option>
-        <option value="10" selected>10 years</option>
-      </select>
-    </div>
-    <div class="param-sep">·</div>
-    <button class="btn btn-primary" id="btnMom" onclick="runMomentum()">▶ Run Backtest</button>
-    <div id="momStatus" class="hidden" style="display:flex;align-items:center;gap:8px">
-      <div class="spinner"></div>
-      <span class="status-text" id="momStatusMsg">Running…</span>
-      <div class="progress-bar-wrap" style="width:120px">
-        <div class="progress-bar-fill" id="momProgress" style="width:0%"></div>
-      </div>
-    </div>
-  </div>
-
-  <div id="momEmpty" class="page">
-    <div class="empty">
-      <div class="empty-icon">📈</div>
-      <div class="empty-title">No result yet</div>
-      <div class="empty-sub">Click <strong>Run Backtest</strong> to run the momentum strategy.<br>
-        Holds top <em>m</em> stocks by prior-month return, replaces <em>x</em> losers each month.</div>
-    </div>
-  </div>
-
-  <div id="momResults" class="hidden">
-    <div class="page" style="display:grid;gap:16px">
-      <div class="card">
-        <div class="card-head">
-          <span class="card-title">Portfolio Growth (₹1 invested)</span>
-          <div style="display:flex;gap:16px;font-size:11px;color:var(--t2)">
-            <span><span style="color:var(--accent)">●</span> Momentum</span>
-            <span><span style="color:var(--t3)">●</span> Nifty 500</span>
-          </div>
-        </div>
-        <div class="chart-wrap"><canvas id="momGrowthChart"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <span class="card-title">Monthly Returns Heatmap — Strategy vs Nifty 500</span>
-          <span style="font-size:11px;color:var(--t3)">green = positive · red = negative</span>
-        </div>
-        <div class="card-body" style="padding:0">
-          <div class="heatmap-wrap" id="momHeatmapWrap"></div>
-        </div>
-      </div>
-      <!-- Momentum trade panel -->
-      <div class="trade-panel" id="momTradePanel">
-        <div class="trade-panel-head">
-          <span class="trade-panel-title">⚡ Execute Rebalance via Kite</span>
-          <span style="font-size:11px;color:var(--t3)">Latest rebalance only · CNC Market orders</span>
-        </div>
-        <div style="padding:14px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-          <div class="param-group">
-            <label>Mode</label>
-            <select id="mom-trade-mode" onchange="_updatePerStockLabel('mom')">
-              <option value="fresh">Fresh Start</option>
-              <option value="rebalance">Rebalance</option>
-            </select>
-          </div>
-          <div class="param-sep">·</div>
-          <div class="param-group">
-            <label>Total Capital (₹)</label>
-            <input id="mom-capital" type="number" value="500000" step="50000" min="100000" style="width:130px" oninput="_updatePerStockLabel('mom')"/>
-          </div>
-          <div style="font-size:11px;color:var(--t2)" id="mom-per-stock-label">₹62,500 per stock (8 stocks)</div>
-          <button class="btn btn-ghost btn-sm" onclick="previewOrders('mom')">Preview Orders</button>
-          <span id="momTradeStatus" style="font-size:11px;color:var(--t3)"></span>
-        </div>
-        <div id="momOrderPreview" class="hidden">
-          <div id="momOrderRows"></div>
-          <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
-            border-top:1px solid var(--border-inner);background:var(--bg-alt)">
-            <div style="font-size:12px;color:var(--t2)" id="momOrderSummary"></div>
-            <button class="btn btn-primary btn-sm" onclick="executeOrders('mom')" id="momExecBtn">
-              Execute All Orders
-            </button>
-          </div>
-          <div class="trade-warning">
-            ⚠️ Market orders will be placed immediately on Kite. Only run during market hours (9:15 AM – 3:30 PM). This action is irreversible.
-          </div>
-        </div>
-        <div id="momOrderResults" class="hidden">
-          <div id="momResultRows"></div>
-          <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;
-            border-top:1px solid var(--border-inner);background:var(--bg-alt)">
-            <span style="font-size:12px;color:var(--t2)" id="momResultSummary"></span>
-            <button class="btn btn-ghost btn-sm hidden" id="momRetryBtn"
-              onclick="retryFailedOrders('mom')" style="margin-left:auto;color:var(--accent)">
-              ↻ Retry Failed
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <span class="card-title">Rebalancing History</span>
-          <span id="momHistMeta" style="font-size:11px;color:var(--t3)"></span>
-        </div>
-        <div id="momHistResults" style="display:grid;grid-template-columns:1fr 2fr;gap:0">
-          <div style="border-right:1px solid var(--border);overflow-y:auto;max-height:420px" id="momHistList"></div>
-          <div id="momHistDetail" style="overflow-y:auto;max-height:420px"></div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- ════════════════════ MINERVINI TAB ════════════════════ -->
@@ -1226,7 +1035,7 @@ html{scroll-behavior:smooth}
     <div id="reportEmpty" style="text-align:center;padding:60px 20px;color:var(--t3)">
       <div style="font-size:32px;margin-bottom:12px">📊</div>
       <div style="font-size:14px;font-weight:600;margin-bottom:6px">No backtest data yet</div>
-      <div style="font-size:12px">Run the Momentum and Trend Breakout backtests first, then come back here.</div>
+      <div style="font-size:12px">Run the Trend Breakout backtest first, then come back here.</div>
     </div>
 
     <div id="reportCards" class="hidden" style="display:flex;flex-direction:column;gap:20px"></div>
@@ -1266,7 +1075,6 @@ function chartColors() {
     bg:      _cv('--bg-alt')       || '#f8fafc',
   };
 }
-let _growthChart = null, _alphaChart = null, _ddChart = null;
 let _sortDir = {}, _sortCol = -1;
 let _activeTab   = 'home';
 let _refreshTimer = null;
@@ -1296,11 +1104,6 @@ function switchTab(name, el) {
     checkKiteStatus();
     loadPulseSignal();
     if (window._haData) renderKPIsHA(window._haData);
-  } else if (name === 'momentum') {
-    _restoreKPILabels();
-    if (window._momData) renderKPIsMomentum(window._momData);
-    clearTimeout(_pulseRefreshTimer);
-    clearInterval(_pulseCountdownTimer);
   } else if (name === 'minervini') {
     _restoreKPILabels();
     if (window._minData) renderKPIs(window._minData);
@@ -1364,105 +1167,6 @@ function renderKPIs(d) {
 function setText(id, v) {
   const el = document.getElementById(id);
   if (el) el.textContent = v ?? '—';
-}
-
-// ── Growth chart ──────────────────────────────────────────────────────────────
-function renderGrowthChart(d) {
-  const ctx = document.getElementById('growthChart').getContext('2d');
-  if (_growthChart) _growthChart.destroy();
-
-  const stratCurve = d.strategy_curve;
-  const ddSeries   = stratCurve.map((v, i) => {
-    const peak = Math.max(...stratCurve.slice(0, i + 1));
-    return round4((v - peak) / peak);
-  });
-
-  _growthChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: d.dates,
-      datasets: [
-        { label: 'ML Strategy', data: d.strategy_curve, borderColor: '#6366f1',
-          backgroundColor: 'rgba(99,102,241,.08)', borderWidth: 2,
-          pointRadius: 0, fill: true, tension: 0.1, yAxisID: 'y' },
-        { label: 'Nifty 500', data: d.benchmark_curve, borderColor: '#475569',
-          backgroundColor: 'transparent', borderWidth: 1.5,
-          pointRadius: 0, borderDash: [4,3], tension: 0.1, yAxisID: 'y' },
-      ],
-    },
-    options: {
-      responsive: true,
-      interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
-        titleColor: chartColors().t1, bodyColor: chartColors().t2,
-        callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}x` },
-      }},
-      scales: {
-        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 12 } },
-        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick,
-          callback: v => v.toFixed(1) + 'x' } },
-      },
-    },
-  });
-
-  renderDDChart(d, ddSeries);
-  renderAlphaChart(d);
-}
-
-function renderDDChart(d, ddSeries) {
-  const ctx = document.getElementById('ddChart').getContext('2d');
-  if (_ddChart) _ddChart.destroy();
-  _ddChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: d.dates,
-      datasets: [{ label: 'Drawdown', data: ddSeries, borderColor: '#ef4444',
-        backgroundColor: 'rgba(239,68,68,.12)', borderWidth: 1.5,
-        pointRadius: 0, fill: true, tension: 0.1 }],
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
-        titleColor: chartColors().t1, bodyColor: chartColors().t2,
-        callbacks: { label: c => ` ${(c.raw * 100).toFixed(1)}%` },
-      }},
-      scales: {
-        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 10 } },
-        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick,
-          callback: v => (v * 100).toFixed(0) + '%' } },
-      },
-    },
-  });
-}
-
-function renderAlphaChart(d) {
-  const ctx = document.getElementById('alphaChart').getContext('2d');
-  if (_alphaChart) _alphaChart.destroy();
-  if (!d.rolling_alpha || !d.rolling_alpha.length) return;
-
-  const labels = d.rolling_alpha.map(r => r.date);
-  const vals   = d.rolling_alpha.map(r => r.alpha);
-  const colors = vals.map(v => v >= 0 ? 'rgba(99,102,241,.7)' : 'rgba(239,68,68,.7)');
-
-  _alphaChart = new Chart(ctx, {
-    type: 'bar',
-    data: { labels, datasets: [{ label: '12M Alpha', data: vals,
-      backgroundColor: colors, borderRadius: 2 }] },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
-        titleColor: chartColors().t1, bodyColor: chartColors().t2,
-        callbacks: { label: c => ` Alpha: ${c.raw >= 0 ? '+' : ''}${c.raw.toFixed(1)}%` },
-      }},
-      scales: {
-        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 10 } },
-        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, callback: v => v + '%' } },
-      },
-    },
-  });
 }
 
 // ── Monthly heatmap ───────────────────────────────────────────────────────────
@@ -1536,27 +1240,20 @@ function renderDayChange(d) {
   const fmt = dt => new Date(dt).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
 
   // ── Today ──────────────────────────────────────────────────────────────
-  const n500 = d.nifty500, min = d.min_portfolio, mom = d.mom_portfolio;
+  const n500 = d.nifty500, min = d.min_portfolio;
   document.getElementById('dayN500').innerHTML = _pctHtml(n500);
   document.getElementById('dayMin').innerHTML  = _pctHtml(min);
-  document.getElementById('dayMom').innerHTML  = _pctHtml(mom);
   if (d.as_of) setText('dayAsOf', fmt(d.as_of));
   if (n500 != null && min != null) {
     const diff = min - n500;
     document.getElementById('dayMinDiff').innerHTML =
       `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
   }
-  if (n500 != null && mom != null) {
-    const diff = mom - n500;
-    document.getElementById('dayMomDiff').innerHTML =
-      `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
-  }
 
   // ── This Month ─────────────────────────────────────────────────────────
-  const mn500 = d.mtd_nifty500, mmin = d.mtd_min_portfolio, mmom = d.mtd_mom_portfolio;
+  const mn500 = d.mtd_nifty500, mmin = d.mtd_min_portfolio;
   document.getElementById('mtdN500').innerHTML = _pctHtml(mn500);
   document.getElementById('mtdMin').innerHTML  = _pctHtml(mmin);
-  document.getElementById('mtdMom').innerHTML  = _pctHtml(mmom);
   if (d.month_start_date && d.as_of)
     setText('mtdAsOf', `${fmt(d.month_start_date)} → ${fmt(d.as_of)}`);
   if (mn500 != null && mmin != null) {
@@ -1564,17 +1261,10 @@ function renderDayChange(d) {
     document.getElementById('mtdMinDiff').innerHTML =
       `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
   }
-  if (mn500 != null && mmom != null) {
-    const diff = mmom - mn500;
-    document.getElementById('mtdMomDiff').innerHTML =
-      `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
-  }
 
   // ── Per-stock entry price, today %, month % ────────────────────────────
   const minStocks   = d.min_stocks      || {};
   const minMtd      = d.mtd_min_stocks  || {};
-  const momStocks   = d.mom_stocks      || {};
-  const momMtd      = d.mtd_mom_stocks  || {};
   const entryPrices = d.entry_prices    || {};
 
   const _inrHtml = v => v == null ? '<span class="d">—</span>'
@@ -1588,22 +1278,14 @@ function renderDayChange(d) {
     if (tr.cells[4]) tr.cells[4].innerHTML = _pctHtml(minStocks[sym]   ?? null);
     if (tr.cells[5]) tr.cells[5].innerHTML = _pctHtml(minMtd[sym]      ?? null);
   });
-  // Momentum: Symbol(0) Status(1) Entry(2) Today(3) Month(4)
-  document.querySelectorAll('#momPortBody tr').forEach(tr => {
-    const sym = tr.dataset.sym;
-    if (!sym) return;
-    if (tr.cells[2]) tr.cells[2].innerHTML = _inrHtml(entryPrices[sym] ?? null);
-    if (tr.cells[3]) tr.cells[3].innerHTML = _pctHtml(momStocks[sym]   ?? null);
-    if (tr.cells[4]) tr.cells[4].innerHTML = _pctHtml(momMtd[sym]      ?? null);
-  });
 }
 
 function renderPortfolio(d) {
   hide('portLoading');
 
-  if (!d.minervini && !d.momentum) {
+  if (!d.minervini) {
     show('portError');
-    setText('portErrorMsg', 'No strategy data yet — run Trend Breakout and Momentum backtest first.');
+    setText('portErrorMsg', 'No strategy data yet — run the Trend Breakout backtest first.');
     return;
   }
 
@@ -1638,29 +1320,6 @@ function renderPortfolio(d) {
     show('minPortEmpty'); hide('minPortTable');
   }
 
-  // ── Momentum picks ────────────────────────────────────────────────────
-  if (d.momentum && d.momentum.holdings && d.momentum.holdings.length) {
-    setText('momPortAsOf', 'as of ' + (d.momentum.as_of || ''));
-    hide('momPortEmpty'); show('momPortTable');
-    const addedSet   = new Set(d.momentum.added   || []);
-    const removedSet = new Set(d.momentum.removed || []);
-    const tbody = document.getElementById('momPortBody');
-    tbody.innerHTML = '';
-    d.momentum.holdings.forEach(sym => {
-      const isNew = addedSet.has(sym);
-      tbody.innerHTML += `<tr data-sym="${sym}">
-        <td class="sym-cell" style="font-weight:600">${sym}</td>
-        <td>${isNew
-          ? '<span class="chip chip-add">NEW</span>'
-          : '<span class="chip chip-hold" style="background:var(--accent-subtle);color:var(--accent-text);border-color:var(--accent-border)">CONT</span>'}</td>
-        <td class="sym-cell d">—</td>
-        <td class="d">—</td>
-        <td class="d">—</td>
-      </tr>`;
-    });
-  } else {
-    show('momPortEmpty'); hide('momPortTable');
-  }
 }
 
 function statCard(label, val, color) {
@@ -1697,39 +1356,6 @@ function scheduleRefresh() {
 document.addEventListener('visibilitychange', () => {
   updateRefreshUI();
 });
-
-// ── Momentum KPIs ─────────────────────────────────────────────────────────────
-function renderKPIsMomentum(d) {
-  const sk = d.strategy_kpi, bk = d.benchmark_kpi;
-  const alpha = (sk.cagr_pct - bk.cagr_pct);
-  setText('k-cagr',   pct(sk.cagr_pct));
-  setText('k-alpha',  `${alpha >= 0 ? '+' : ''}${alpha.toFixed(1)}% alpha vs Nifty`);
-  setText('k-bcagr',  pct(bk.cagr_pct));
-  setText('k-bperiod',`Nifty 500 · ${d.params.years}y`);
-  setText('k-sharpe', fmt(sk.sharpe));
-  setText('k-sortino',`Sortino ${fmt(sk.sortino)}`);
-  setText('k-mdd',    pct(sk.max_dd_pct, 1));
-  setText('k-calmar', `Calmar ${fmt(sk.calmar)}`);
-  setText('k-wr',     (sk.win_rate_pct ?? 0).toFixed(1) + '%');
-  setText('k-months', sk.total_months + ' months');
-  setText('k-total',  pct(sk.total_return_pct, 1));
-  const momDates  = d.dates || [];
-  const momFrom   = momDates.length ? momDates[0].slice(0, 7)                  : '';
-  const momTo     = momDates.length ? momDates[momDates.length - 1].slice(0, 7) : '';
-  setText('k-period', momFrom && momTo ? `${momFrom} → ${momTo}` : `${d.params.years}-year backtest`);
-  const momCurYear = new Date().getFullYear();
-  const momYtdRow  = (d.monthly_returns || []).find(r => r.year === momCurYear);
-  const momYtd     = momYtdRow ? momYtdRow.Annual : null;
-  setText('k-ytd-label', `${momCurYear} YTD`);
-  setText('k-ytd',       pct(momYtd, 1));
-  setText('k-ytd-sub',   momYtd != null ? 'same across all runs' : 'run backtest first');
-  document.getElementById('k-ytd').className = 'kpi-value ' + clr(momYtd);
-  setText('k-univ',     d.params.universe_size ?? '—');
-  setText('k-topn',     d.params.m ?? '—');
-  setText('k-topn-sub', 'momentum top-m');
-  document.getElementById('k-cagr').className = 'kpi-value ' + (sk.cagr_pct >= 0 ? 'g' : 'r');
-
-}
 
 // ── HA KPIs ───────────────────────────────────────────────────────────────────
 function renderKPIsHA(d) {
@@ -1951,155 +1577,6 @@ function renderHA(d) {
       <td style="color:var(--t3)">${t.exit_reason}</td>
     </tr>`;
   }).join('');
-}
-
-// ── Momentum backtest ─────────────────────────────────────────────────────────
-let _momChart = null;
-
-async function runMomentum() {
-  const m     = +document.getElementById('mp-m').value;
-  const x     = +document.getElementById('mp-x').value;
-  const years = +document.getElementById('mp-years').value;
-
-  document.getElementById('btnMom').disabled = true;
-  document.getElementById('momStatus').classList.remove('hidden');
-  document.getElementById('momStatus').style.display = 'flex';
-  document.getElementById('momEmpty').classList.add('hidden');
-  document.getElementById('momResults').classList.add('hidden');
-
-  const progEl = document.getElementById('momProgress');
-  const msgEl  = document.getElementById('momStatusMsg');
-
-  const pollProgress = setInterval(async () => {
-    try {
-      const s = await fetch(API + '/api/momentum/backtest/status').then(r => r.json());
-      if (s.progress && s.progress.total) {
-        const pct = Math.round((s.progress.step / s.progress.total) * 100);
-        progEl.style.width = pct + '%';
-        msgEl.textContent  = s.progress.msg || 'Running…';
-      }
-    } catch(_) {}
-  }, 3000);
-
-  try {
-    const res = await fetch(API + '/api/momentum/backtest/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ m, x, years }),
-    });
-    clearInterval(pollProgress);
-    if (!res.ok) throw new Error(await res.text());
-    const momData = await res.json();
-    renderMomentum(momData);
-    showToast(`Momentum backtest complete · ${years}y`, 'success');
-  } catch(e) {
-    clearInterval(pollProgress);
-    msgEl.textContent = 'Error: ' + e.message;
-    showToast('Momentum backtest failed: ' + e.message, 'error');
-  } finally {
-    document.getElementById('btnMom').disabled = false;
-    document.getElementById('momStatus').style.display = 'none';
-  }
-}
-
-function renderMomentum(d) {
-  document.getElementById('momEmpty').classList.add('hidden');
-  document.getElementById('momResults').classList.remove('hidden');
-  window._momData = d;
-  if (_activeTab === 'momentum') renderKPIsMomentum(d);
-  if (_activeTab === 'report') renderReport();
-  drawSparkline('spark-mom', d.strategy_curve);
-
-  const ctx = document.getElementById('momGrowthChart').getContext('2d');
-  if (_momChart) _momChart.destroy();
-  _momChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: d.dates,
-      datasets: [
-        { label: 'Momentum', data: d.strategy_curve, borderColor: '#6366f1',
-          backgroundColor: 'rgba(99,102,241,.08)', borderWidth: 2,
-          pointRadius: 0, fill: true, tension: 0.1 },
-        { label: 'Nifty 500', data: d.benchmark_curve, borderColor: '#94a3b8',
-          backgroundColor: 'transparent', borderWidth: 1.5,
-          pointRadius: 0, borderDash: [4,3], tension: 0.1 },
-      ],
-    },
-    options: {
-      responsive: true,
-      interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
-        titleColor: chartColors().t1, bodyColor: chartColors().t2,
-        callbacks: { label: c => ` ${c.dataset.label}: ${c.raw.toFixed(2)}x` },
-      }},
-      scales: {
-        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 12 } },
-        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, callback: v => v.toFixed(1)+'x' } },
-      },
-    },
-  });
-
-  renderHeatmap(d.monthly_returns, d.monthly_bench, 'momHeatmapWrap');
-  renderMomHistory(d);
-}
-
-function renderMomHistory(d) {
-  const log = (d.rebalance_history || []).slice().reverse();
-  if (!log.length) return;
-  window._momLog = log;
-
-  document.getElementById('momHistMeta').textContent =
-    `${log.length} rebalances · avg turnover ${
-      (log.reduce((s,r) => s + r.turnover_pct, 0) / log.length).toFixed(1)}%`;
-
-  document.getElementById('momHistList').innerHTML = log.map((r, i) => {
-    const cls = r.period_ret_pct >= 0 ? 'g' : 'r';
-    const addChips = r.added.map(t =>
-      `<span class="chip chip-add" style="font-size:9px;padding:1px 5px">${t.replace('.NS','')}</span>`).join('');
-    const remChips = r.removed.map(t =>
-      `<span class="chip chip-rem" style="font-size:9px;padding:1px 5px">${t.replace('.NS','')}</span>`).join('');
-    return `<div class="reblog-item" style="cursor:pointer" onclick="showMomDetail(${i})">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div class="reblog-date">${r.date}</div>
-        <div class="reblog-stat ${cls}" style="font-weight:700">${r.period_ret_pct >= 0 ? '+' : ''}${r.period_ret_pct.toFixed(1)}%</div>
-      </div>
-      ${addChips ? `<div style="margin-bottom:3px">${addChips}</div>` : ''}
-      ${remChips ? `<div style="margin-bottom:3px">${remChips}</div>` : ''}
-      <div class="reblog-stat" style="font-size:10px;color:var(--t3)">Turnover ${r.turnover_pct.toFixed(0)}% · Nifty ${r.bench_ret_pct >= 0 ? '+' : ''}${r.bench_ret_pct.toFixed(1)}%</div>
-    </div>`;
-  }).join('');
-
-  if (log.length) showMomDetail(0);
-}
-
-function showMomDetail(idx) {
-  const r = window._momLog[idx];
-  if (!r) return;
-  const alpha = r.period_ret_pct - (r.bench_ret_pct ?? 0);
-  document.getElementById('momHistDetail').innerHTML = `
-    <div style="padding:20px">
-      <div style="font-size:16px;font-weight:700;color:var(--t1);margin-bottom:12px">${r.date}</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
-        ${statCard('Return', pct(r.period_ret_pct), r.period_ret_pct >= 0 ? '#16a34a' : '#dc2626')}
-        ${statCard('Alpha', pct(alpha,1), alpha >= 0 ? '#16a34a' : '#dc2626')}
-        ${statCard('Turnover', r.turnover_pct.toFixed(0)+'%', '#64748b')}
-      </div>
-      ${r.added.length ? `
-        <div style="margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Added (${r.added.length})</div>
-          <div class="reblog-chips">${r.added.map(t => `<span class="chip chip-add">${t.replace('.NS','')}</span>`).join('')}</div>
-        </div>` : ''}
-      ${r.removed.length ? `
-        <div style="margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Removed (${r.removed.length})</div>
-          <div class="reblog-chips">${r.removed.map(t => `<span class="chip chip-rem">${t.replace('.NS','')}</span>`).join('')}</div>
-        </div>` : ''}
-      <div>
-        <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Holdings (${r.holdings.length})</div>
-        <div class="reblog-chips">${r.holdings.map(t => `<span class="chip chip-hold">${t.replace('.NS','')}</span>`).join('')}</div>
-      </div>
-    </div>`;
 }
 
 // ── Pulse live signal ─────────────────────────────────────────────────────────
@@ -2445,23 +1922,15 @@ async function loadAutoLog() {
 // ── Order execution ───────────────────────────────────────────────────────────
 
 function _updatePerStockLabel(strategy) {
-  if (strategy === 'min') {
-    const cap  = +document.getElementById('min-capital').value || 0;
-    const n    = +document.getElementById('mv-topn').value || 20;
-    const per  = cap / n;
-    document.getElementById('min-per-stock-label').textContent =
-      `₹${Math.round(per).toLocaleString('en-IN')} per stock (${n} stocks)`;
-  } else {
-    const cap  = +document.getElementById('mom-capital').value || 0;
-    const m    = +document.getElementById('mp-m').value || 8;
-    const per  = cap / m;
-    document.getElementById('mom-per-stock-label').textContent =
-      `₹${Math.round(per).toLocaleString('en-IN')} per stock (${m} stocks)`;
-  }
+  const cap  = +document.getElementById('min-capital').value || 0;
+  const n    = +document.getElementById('mv-topn').value || 20;
+  const per  = cap / n;
+  document.getElementById('min-per-stock-label').textContent =
+    `₹${Math.round(per).toLocaleString('en-IN')} per stock (${n} stocks)`;
 }
 
 function _getRebalanceLog(strategy) {
-  const log = strategy === 'min' ? window._minLog : window._momLog;
+  const log = window._minLog;
   return log && log.length ? log[0] : null;  // log[0] is already latest (reversed)
 }
 
@@ -2497,12 +1966,10 @@ function _renderResultRows(results, containerId) {
 }
 
 function _tradeParams(strategy) {
-  const pfx    = strategy === 'min' ? 'min' : 'mom';
+  const pfx    = 'min';
   const mode   = document.getElementById(`${pfx}-trade-mode`).value;
   const cap    = +document.getElementById(`${pfx}-capital`).value;
-  const stocks = strategy === 'min'
-    ? (+document.getElementById('mv-topn').value || 20)
-    : (+document.getElementById('mp-m').value || 8);
+  const stocks = +document.getElementById('mv-topn').value || 20;
   const r = _getRebalanceLog(strategy);
   if (!r) return null;
 
@@ -2568,7 +2035,7 @@ async function executeOrders(strategy) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to_buy: p.to_buy, to_sell: p.to_sell, capital_per_stock: p.capital_per_stock,
-                             strategy: strategy === 'min' ? 'minervini' : 'momentum', mode: p.mode }),
+                             strategy: 'minervini', mode: p.mode }),
     });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
@@ -2904,7 +2371,7 @@ async function _startReportPoll() {
   clearTimeout(_reportPollTimer);
   try {
     const st = await fetch(API + '/api/report/status').then(r => r.json());
-    const running = st.momentum_running || st.minervini_running;
+    const running = st.minervini_running;
     const wasRefreshing = window._reportRefreshing;
     window._reportRefreshing = running;
 
@@ -2914,10 +2381,6 @@ async function _startReportPoll() {
     } else if (wasRefreshing) {
       // Just finished — reload fresh data then re-render
       window._reportRefreshing = false;
-      try {
-        const r1 = await fetch(API + '/api/momentum/backtest/result');
-        if (r1.ok) renderMomentum(await r1.json());
-      } catch(_) {}
       try {
         const r2 = await fetch(API + '/api/minervini/backtest/result');
         if (r2.ok) renderMinervini(await r2.json());
@@ -2962,7 +2425,6 @@ function renderReport() {
   }
 
   const strategies = [
-    { label: 'Multi-Factor Momentum', color: 'var(--accent)', data: window._momData },
     { label: 'Trend Breakout',        color: '#f59e0b',       data: window._minData },
   ];
 
@@ -3138,7 +2600,7 @@ function round4(v) { return Math.round(v * 10000) / 10000; }
 
 async function init() {
   initDark();
-  const validTabs = ['home', 'portfolio', 'momentum', 'minervini', 'ha', 'report'];
+  const validTabs = ['home', 'portfolio', 'minervini', 'ha', 'report'];
   const hashTab = window.location.hash.slice(1);
   if (hashTab && validTabs.includes(hashTab)) goToTab(hashTab);
 
@@ -3151,11 +2613,6 @@ async function init() {
   document.getElementById('ha-to').value   = today;
 
   // Load cached results in background
-  try {
-    const res = await fetch(API + '/api/momentum/backtest/result');
-    if (res.ok) renderMomentum(await res.json());
-  } catch(_) {}
-
   try {
     const res = await fetch(API + '/api/minervini/backtest/result');
     if (res.ok) renderMinervini(await res.json());
