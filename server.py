@@ -310,7 +310,7 @@ async def momentum_backtest_run(params: MomentumParams):
 
     loop   = asyncio.get_event_loop()
     result = await loop.run_in_executor(_executor, _run)
-    return result
+    return _strip_partial_month(result)
 
 
 @app.get("/api/momentum/backtest/result")
@@ -361,6 +361,20 @@ async def minervini_backtest_run(params: MinerviniParams):
 
     loop   = asyncio.get_event_loop()
     result = await loop.run_in_executor(_executor, _run)
+    return _minervini_view(result)
+
+
+def _minervini_view(cache: dict) -> dict:
+    """Strip the partial current month and lock current-month holdings to the
+    held snapshot. Used by BOTH the run and result endpoints so a fresh run
+    never shows the raw partial-month return (e.g. June 6.4%)."""
+    result = _strip_partial_month(cache)
+    snap = _held_holdings("minervini")
+    rh   = result.get("rebalance_history", [])
+    if snap and rh and rh[-1].get("date") == date.today().strftime("%Y-%m"):
+        rh[-1]["holdings"] = list(snap)
+        rh[-1]["added"]    = []   # current held set — turnover vs algorithm hidden
+        rh[-1]["removed"]  = []
     return result
 
 
@@ -368,7 +382,7 @@ async def minervini_backtest_run(params: MinerviniParams):
 def minervini_backtest_result():
     if not _min_bt_cache:
         raise HTTPException(404, "No Trend Breakout backtest result — run one first")
-    return _strip_partial_month(_min_bt_cache)
+    return _minervini_view(_min_bt_cache)
 
 
 @app.get("/api/minervini/backtest/status")
