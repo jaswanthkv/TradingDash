@@ -80,6 +80,37 @@ def _held_month(strategy: str) -> str:
     return _load_held().get(strategy, {}).get("as_of", "")[:7]
 
 
+_NIFTY500_TOKEN = None   # cached Kite instrument token for NIFTY 500
+
+
+def _nifty500_kite_series(days: int = 45):
+    """Daily closes for NIFTY 500 from Kite (reliable, no gaps), or None if Kite
+    is not connected / unavailable. yfinance's ^CRSLDX index feed lags ~a day, so
+    we prefer Kite for the benchmark's daily/MTD numbers when we can."""
+    global _NIFTY500_TOKEN
+    if not kite_auth.kite_status().get("connected"):
+        return None
+    try:
+        kite = kite_auth.get_kite()
+        if _NIFTY500_TOKEN is None:
+            for inst in kite.instruments("NSE"):
+                if inst.get("name") == "NIFTY 500":   # unique index name
+                    _NIFTY500_TOKEN = inst["instrument_token"]
+                    break
+        if not _NIFTY500_TOKEN:
+            return None
+        to_d   = date.today()
+        from_d = to_d - timedelta(days=days)
+        raw = kite.historical_data(_NIFTY500_TOKEN, from_d, to_d, "day")
+        if not raw:
+            return None
+        s = pd.Series({pd.Timestamp(r["date"]).tz_localize(None).normalize(): r["close"]
+                       for r in raw})
+        return s.sort_index()
+    except Exception:
+        return None
+
+
 def _strip_partial_month(result: dict) -> dict:
     """Null out the current (partial) month from monthly_returns/monthly_bench grids."""
     if not result:
@@ -321,16 +352,17 @@ async def portfolio_daily_change():
             if len(series) >= 2 and series.iloc[-2] > 0:
                 day_chg[col] = round((series.iloc[-1] / series.iloc[-2] - 1) * 100, 2)
 
-        # ── MTD: last close of previous month → today ──────────────────────
+        # ── MTD: first close of current month (rebalance/entry date) → today ─
+        # The portfolio is formed on the 1st, so measure from the 1st — same base
+        # as the entry prices. Both portfolio and benchmark use this date.
         mtd_chg    = {}
         mtd_base   = ""
         entry_prices = {}
         entry_chg    = {}
         if not cm.empty:
-            pre_month = cm[cm.index <  pd.Timestamp(month_start_str)]
             cur_month = cm[cm.index >= pd.Timestamp(month_start_str)]
             if not cur_month.empty:
-                base_row = pre_month.iloc[-1] if not pre_month.empty else cur_month.iloc[0]
+                base_row = cur_month.iloc[0]   # first close of current month (June 1)
                 last_row = cur_month.iloc[-1]
                 entry_row = cur_month.iloc[0]   # entry = first close of current month
                 for col in cm.columns:
@@ -340,7 +372,7 @@ async def portfolio_daily_change():
                     e = entry_row.get(col)
                     if pd.notna(e) and pd.notna(l) and e > 0:
                         entry_prices[col] = round(float(e), 2)
-                mtd_base = str(base_row.name)[:10] if not pre_month.empty else str(cur_month.index[0])[:10]
+                mtd_base = str(cur_month.index[0])[:10]   # first trading day of the month
 
         return day_chg, mtd_chg, cm, mtd_base, entry_prices
 
@@ -354,6 +386,18 @@ async def portfolio_daily_change():
     bm    = cm["^CRSLDX"].dropna() if "^CRSLDX" in cm.columns else pd.Series(dtype=float)
     as_of = str(bm.index[-1])[:10] if len(bm) >= 1 else ""
     prev  = str(bm.index[-2])[:10] if len(bm) >= 2 else ""
+
+    # Prefer Kite for the Nifty 500 benchmark — yfinance's ^CRSLDX index lags ~a
+    # day, producing wrong Today/MTD numbers. Falls back to yfinance if unavailable.
+    kb = await loop.run_in_executor(_executor, _nifty500_kite_series)
+    if kb is not None and len(kb) >= 2:
+        changes["^CRSLDX"] = round((kb.iloc[-1] / kb.iloc[-2] - 1) * 100, 2)
+        kb_cur = kb[kb.index >= pd.Timestamp(month_start_str)]
+        if not kb_cur.empty:
+            base = kb_cur.iloc[0]   # first close of current month (matches portfolio)
+            mtd["^CRSLDX"] = round((kb_cur.iloc[-1] / base - 1) * 100, 2)
+        as_of = str(kb.index[-1].date())
+        prev  = str(kb.index[-2].date())
 
     return {
         "nifty500":        changes.get("^CRSLDX"),
