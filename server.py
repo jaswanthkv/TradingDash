@@ -416,6 +416,93 @@ async def portfolio_daily_change():
     }
 
 
+@app.get("/api/portfolio/vs-index")
+async def portfolio_vs_index(months: int = 3, from_month_start: bool = False):
+    """Cumulative growth curve (rebased to 100) of the current Trend Breakout
+    portfolio — equal-weighted current holdings — vs Nifty 500. Spans the last
+    `months` months, or the current calendar month-to-date when
+    `from_month_start` is set. Powers the 'My Portfolio vs Index' chart."""
+    import yfinance as yf
+    import numpy as np
+
+    months = max(1, min(months, 24))
+
+    # Current holdings: prefer executed snapshot, else last backtest rebalance.
+    tickers = _held_holdings("minervini")
+    if not tickers and _min_bt_cache:
+        rh = _min_bt_cache.get("rebalance_history", [])
+        if rh:
+            tickers = rh[-1].get("holdings", [])
+    if not tickers:
+        return {"dates": [], "portfolio_curve": [], "benchmark_curve": [],
+                "tickers": [], "months": months}
+
+    if from_month_start:
+        start_d   = date.today().replace(day=1)        # rebase to 1st trading day of month
+        kite_days = (date.today() - start_d).days + 7
+    else:
+        start_d   = date.today() - timedelta(days=months * 31 + 7)
+        kite_days = months * 31 + 7
+    start = start_d.strftime("%Y-%m-%d")
+
+    def _build():
+        raw = yf.download(list(set(tickers)) + ["^CRSLDX"], start=start, interval="1d",
+                          auto_adjust=True, progress=False, threads=True)
+        cm = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+        cm = cm.dropna(how="all")
+        cm.index = pd.to_datetime(cm.index).tz_localize(None).normalize()
+
+        # ── Equal-weighted portfolio: normalise each name to its first close ──
+        cols = [t for t in tickers if t in cm.columns]
+        port_px = cm[cols].dropna(how="any")          # dates where all names trade
+        if port_px.empty:
+            port_px = cm[cols].ffill().dropna(how="all")
+        if port_px.empty:
+            return [], [], []
+        norm = port_px / port_px.iloc[0]
+        port = (norm.mean(axis=1) / norm.mean(axis=1).iloc[0] * 100).round(2)
+
+        # ── Benchmark: prefer Kite series, else yfinance ^CRSLDX ─────────────
+        kb = _nifty500_kite_series(days=kite_days)
+        if kb is not None and len(kb) >= 2:
+            bench_src = kb
+            bench_src.index = pd.to_datetime(bench_src.index).tz_localize(None).normalize()
+        elif "^CRSLDX" in cm.columns:
+            bench_src = cm["^CRSLDX"].dropna()
+        else:
+            bench_src = pd.Series(dtype=float)
+
+        bench = bench_src.reindex(port.index, method="ffill")
+        bench = bench.bfill()
+        if bench.notna().any() and bench.iloc[0] and bench.iloc[0] > 0:
+            bench = (bench / bench.iloc[0] * 100).round(2)
+        else:
+            bench = pd.Series([None] * len(port), index=port.index)
+
+        dates = [d.strftime("%Y-%m-%d") for d in port.index]
+        port_curve  = [None if pd.isna(v) else float(v) for v in port.values]
+        bench_curve = [None if pd.isna(v) else float(v) for v in bench.values]
+        return dates, port_curve, bench_curve
+
+    loop = asyncio.get_event_loop()
+    dates, port_curve, bench_curve = await loop.run_in_executor(_executor, _build)
+
+    def _ret(curve):
+        vals = [v for v in curve if v is not None]
+        return round(vals[-1] - 100, 2) if vals else None
+
+    return {
+        "dates":           dates,
+        "portfolio_curve": port_curve,
+        "benchmark_curve": bench_curve,
+        "port_return":     _ret(port_curve),
+        "bench_return":    _ret(bench_curve),
+        "tickers":         [t.replace(".NS", "") for t in tickers],
+        "months":          months,
+        "from_month_start": from_month_start,
+    }
+
+
 @app.get("/api/portfolio/strategies")
 def portfolio_strategies():
     """Current Trend Breakout strategy picks — no Kite required."""

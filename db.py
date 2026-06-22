@@ -4,18 +4,22 @@ db.py — SQLite persistence for backtest results and rank snapshots.
 import json
 import sqlite3
 import os
+from contextlib import closing
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "tradeboard.db")
 
 
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 
 def init_db():
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS backtest_runs (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,8 +37,10 @@ def init_db():
                 result     TEXT    NOT NULL,
                 created_at TEXT    DEFAULT (datetime('now'))
             );
+            CREATE INDEX IF NOT EXISTS idx_runs_lookup
+                ON backtest_runs (strategy, years, top_n, cost_bps, id);
         """)
-        # migrate: add strategy column if it doesn't exist yet
+        # migrate: add strategy column for DBs created before it existed
         cols = [r[1] for r in conn.execute("PRAGMA table_info(backtest_runs)").fetchall()]
         if "strategy" not in cols:
             conn.execute("ALTER TABLE backtest_runs ADD COLUMN strategy TEXT NOT NULL DEFAULT 'ml'")
@@ -42,7 +48,7 @@ def init_db():
 
 def save_backtest(years: int, top_n: int, cost_bps: float, result: dict,
                   strategy: str = "ml"):
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         conn.execute(
             """INSERT INTO backtest_runs
                (strategy, years, top_n, cost_bps, result, run_at)
@@ -51,10 +57,10 @@ def save_backtest(years: int, top_n: int, cost_bps: float, result: dict,
         )
 
 
-def get_latest_backtest(years: int = None, top_n: int = None, cost_bps: float = None,
-                        strategy: str = "ml") -> dict:
+def get_latest_backtest(years: int | None = None, top_n: int | None = None,
+                        cost_bps: float | None = None, strategy: str = "ml") -> dict:
     """Most recent run matching strategy + params, or most recent of that strategy."""
-    with _connect() as conn:
+    with closing(_connect()) as conn:
         if years is not None and top_n is not None and cost_bps is not None:
             row = conn.execute(
                 """SELECT result FROM backtest_runs
@@ -71,7 +77,7 @@ def get_latest_backtest(years: int = None, top_n: int = None, cost_bps: float = 
 
 
 def save_rank_snapshot(result: dict):
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         conn.execute(
             "INSERT INTO rank_snapshots (as_of, result) VALUES (?,?)",
             (result.get("as_of", ""), json.dumps(result)),
@@ -79,16 +85,16 @@ def save_rank_snapshot(result: dict):
 
 
 def get_latest_rank_snapshot() -> dict:
-    with _connect() as conn:
+    with closing(_connect()) as conn:
         row = conn.execute(
             "SELECT result FROM rank_snapshots ORDER BY id DESC LIMIT 1"
         ).fetchone()
         return json.loads(row["result"]) if row else {}
 
 
-def list_backtest_runs(strategy: str = None) -> list[dict]:
+def list_backtest_runs(strategy: str | None = None) -> list[dict]:
     """Summary of all runs — no result blob. Optionally filter by strategy."""
-    with _connect() as conn:
+    with closing(_connect()) as conn:
         if strategy:
             rows = conn.execute(
                 """SELECT id, strategy, years, top_n, cost_bps, run_at, created_at

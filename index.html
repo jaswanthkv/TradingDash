@@ -590,6 +590,30 @@ html{scroll-behavior:smooth}
       </div>
     </div>
 
+    <!-- Portfolio vs Index growth chart -->
+    <div class="page">
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">📈 My Portfolio vs Nifty 500</span>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span id="vsIndexMeta" class="d" style="font-size:11px">—</span>
+            <div id="vsIndexRange" style="display:flex;gap:4px">
+              <button class="btn btn-ghost btn-sm vs-range" data-r="mtd" style="padding:2px 8px;font-size:11px">This Month</button>
+              <button class="btn btn-ghost btn-sm vs-range" data-r="1" style="padding:2px 8px;font-size:11px">1M</button>
+              <button class="btn btn-ghost btn-sm vs-range active" data-r="3" style="padding:2px 8px;font-size:11px">3M</button>
+              <button class="btn btn-ghost btn-sm vs-range" data-r="6" style="padding:2px 8px;font-size:11px">6M</button>
+              <button class="btn btn-ghost btn-sm vs-range" data-r="12" style="padding:2px 8px;font-size:11px">1Y</button>
+            </div>
+          </div>
+        </div>
+        <div id="vsIndexEmpty" class="empty hidden" style="padding:24px">
+          <div class="empty-title" style="font-size:13px">No holdings to chart yet</div>
+          <div class="empty-sub">Run the Trend Breakout backtest first.</div>
+        </div>
+        <div id="vsIndexChartWrap" class="chart-wrap"><canvas id="portVsIndexChart"></canvas></div>
+      </div>
+    </div>
+
     <div class="page">
       <div style="display:grid;grid-template-columns:1fr;gap:16px">
 
@@ -1215,6 +1239,7 @@ async function loadPortfolio(force = false) {
     _portData = d;
     renderPortfolio(d);
     loadDayChange();   // fetch daily changes in background
+    loadVsIndex();     // fetch portfolio-vs-index curve in background
   } catch(e) {
     hide('portLoading');
     show('portError');
@@ -1229,6 +1254,74 @@ async function loadDayChange() {
     renderDayChange(d);
   } catch(_) {}
 }
+
+// ── Portfolio vs Index growth chart ──────────────────────────────────────────
+let _vsChart = null;
+let _vsRange = '3';   // '3' months, or 'mtd' for month-to-date
+
+async function loadVsIndex(range = _vsRange) {
+  _vsRange = range;
+  document.querySelectorAll('.vs-range').forEach(b =>
+    b.classList.toggle('active', b.dataset.r === String(range)));
+  const qs = range === 'mtd' ? 'from_month_start=true' : 'months=' + range;
+  try {
+    const d = await fetch(API + '/api/portfolio/vs-index?' + qs).then(r => r.json());
+    renderVsIndex(d);
+  } catch(_) {}
+}
+
+function renderVsIndex(d) {
+  const empty = document.getElementById('vsIndexEmpty');
+  const wrap  = document.getElementById('vsIndexChartWrap');
+  if (!d.dates || !d.dates.length) {
+    show('vsIndexEmpty'); hide('vsIndexChartWrap');
+    setText('vsIndexMeta', '');
+    return;
+  }
+  hide('vsIndexEmpty'); show('vsIndexChartWrap');
+
+  const pr = d.port_return, br = d.bench_return;
+  if (pr != null && br != null) {
+    const alpha = pr - br;
+    document.getElementById('vsIndexMeta').innerHTML =
+      `Portfolio ${pr>=0?'+':''}${pr.toFixed(1)}% · Nifty 500 ${br>=0?'+':''}${br.toFixed(1)}% ` +
+      `<span class="${alpha>=0?'g':'r'}">(${alpha>=0?'+':''}${alpha.toFixed(1)}%)</span>`;
+  } else {
+    setText('vsIndexMeta', '');
+  }
+
+  const ctx = document.getElementById('portVsIndexChart').getContext('2d');
+  if (_vsChart) _vsChart.destroy();
+  _vsChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.dates,
+      datasets: [
+        { label: 'My Portfolio', data: d.portfolio_curve, borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245,158,11,.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1, spanGaps: true },
+        { label: 'Nifty 500', data: d.benchmark_curve, borderColor: '#94a3b8',
+          backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, borderDash: [4,3], tension: 0.1, spanGaps: true },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: true, labels: { color: chartColors().t2, boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
+          titleColor: chartColors().t1, bodyColor: chartColors().t2,
+          callbacks: { label: c => ` ${c.dataset.label}: ${c.raw == null ? '—' : (c.raw - 100 >= 0 ? '+' : '') + (c.raw - 100).toFixed(2) + '%'}` },
+        }},
+      scales: {
+        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 10 } },
+        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, callback: v => (v - 100 >= 0 ? '+' : '') + (v - 100).toFixed(0) + '%' } },
+      },
+    },
+  });
+}
+
+document.querySelectorAll('.vs-range').forEach(b =>
+  b.addEventListener('click', () => loadVsIndex(b.dataset.r)));
 
 function _pctHtml(v) {
   if (v == null) return '<span class="d">—</span>';
