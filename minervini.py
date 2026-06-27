@@ -48,9 +48,10 @@ CRITERIA_SHORT = {
 
 def compute_sepa(close: pd.DataFrame,
                  high: pd.DataFrame = None,
-                 low:  pd.DataFrame = None) -> dict:
+                 low:  pd.DataFrame = None,
+                 benchmark: str = BENCHMARK) -> dict:
     """Vectorised SEPA criteria across all dates × stocks."""
-    stocks = [c for c in close.columns if c != BENCHMARK]
+    stocks = [c for c in close.columns if c != benchmark]
     sc = close[stocks]
 
     sma50  = sc.rolling(50,  min_periods=50).mean()
@@ -142,15 +143,13 @@ def _monthly_grid(ret: pd.Series) -> list:
     for yr in sorted(df.index.year.unique()):
         yr_d = df[df.index.year == yr]
         row = {"year": int(yr)}
-        ann = 1.0
         for mi, mon in enumerate(months, 1):
             mo_d = yr_d[yr_d.index.month == mi]
-            if len(mo_d):
-                v = round(float(mo_d.iloc[-1]) * 100, 2)
-                row[mon] = v; ann *= (1 + mo_d.iloc[-1])
-            else:
-                row[mon] = None
-        row["Annual"] = round((ann - 1) * 100, 2)
+            row[mon] = round(float(mo_d.iloc[-1]) * 100, 2) if len(mo_d) else None
+        # Annual = simple sum of the monthly returns shown (per user preference).
+        # NOTE: this is NOT compounded, so it differs from the CAGR / Total Return
+        # KPIs, which remain correctly compounded.
+        row["Annual"] = round(sum(v for m in months if (v := row[m]) is not None), 2)
         rows.append(row)
     return rows
 
@@ -163,19 +162,28 @@ def run_backtest(
     capital:  float = 500_000,
     cost_bps: float = 20,
     progress_cb=None,
+    market:   str   = "india",
 ) -> dict:
     def _prog(step, total, msg):
         if progress_cb: progress_cb(step, total, msg)
 
+    benchmark   = st.BENCHMARKS.get(market, BENCHMARK)
+    bench_label = "S&P 500 Buy & Hold" if market == "us" else "Nifty 500 Buy & Hold"
+
     _prog(1, 5, "Loading universe …")
-    tickers = st.load_universe()
+    tickers = st.load_universe(market)
 
     _prog(2, 5, f"Downloading {len(tickers)} tickers ({years}y daily) …")
-    close, _, high, low = st.download_data(tickers, years=years, include_hl=True)
+    def _dl_prog(done, total, msg):
+        # Map batch progress into the slice between step 2 and step 3 so the
+        # bar visibly advances during the (long) download instead of freezing.
+        _prog(2 + (done / total) * 0.9 if total else 2, 5, msg)
+    close, _, high, low = st.download_data(tickers, years=years, include_hl=True,
+                                           benchmark=benchmark, progress_cb=_dl_prog)
 
     _prog(3, 5, "Computing SEPA criteria …")
-    sepa   = compute_sepa(close, high, low)
-    stocks = [c for c in close.columns if c != BENCHMARK]
+    sepa   = compute_sepa(close, high, low, benchmark=benchmark)
+    stocks = [c for c in close.columns if c != benchmark]
 
     # Rebalance dates: first trading day each month after warmup
     warmup_end = close.index[0] + pd.DateOffset(days=int(MIN_BARS * 365 / 252) + 30)
@@ -196,8 +204,8 @@ def run_backtest(
 
     # Clean benchmark series (drop NaN bars) — the Nifty 500 index has data gaps
     # on some dates; .asof() then gives the last valid close on/before any date.
-    bench_series = (close[BENCHMARK].dropna()
-                    if BENCHMARK in close.columns else pd.Series(dtype=float))
+    bench_series = (close[benchmark].dropna()
+                    if benchmark in close.columns else pd.Series(dtype=float))
 
     for i, rd in enumerate(rebalance_dates):
         rd_ts   = pd.Timestamp(rd)
@@ -279,8 +287,13 @@ def run_backtest(
                 bench_monthly = float(b_exit / b_entry - 1)
 
         label = rd_ts.strftime("%Y-%m")
-        port_returns[label]  = port_monthly
-        bench_returns[label] = bench_monthly
+        # Only count a month if it has fully elapsed. The current calendar month
+        # is still in progress, so its partial return must not feed the metrics
+        # (CAGR, totals, curve) — we keep the holdings row but with no return.
+        is_incomplete = label == date.today().strftime("%Y-%m")
+        if not is_incomplete:
+            port_returns[label]  = port_monthly
+            bench_returns[label] = bench_monthly
 
         top5 = [{"ticker": t, "rs_rating": round(float(rs_row[t]), 1)}
                 for t in portfolio[:5] if t in rs_row.index]
@@ -292,8 +305,8 @@ def run_backtest(
             "removed":        removed,
             "qualifying":     len(passing),
             "turnover_pct":   round(turnover * 100, 1),
-            "period_ret_pct": round(port_monthly * 100, 2),
-            "bench_ret_pct":  round(bench_monthly * 100, 2),
+            "period_ret_pct": None if is_incomplete else round(port_monthly * 100, 2),
+            "bench_ret_pct":  None if is_incomplete else round(bench_monthly * 100, 2),
             "top5":           top5,
         })
         prev_portfolio = portfolio[:]
@@ -304,7 +317,7 @@ def run_backtest(
     bench_r = pd.Series(bench_returns).reindex(strat_r.index).fillna(0)
 
     strat_kpi = _kpis(strat_r, f"Minervini SEPA Top-{top_n}")
-    bench_kpi = _kpis(bench_r, "Nifty 500 Buy & Hold")
+    bench_kpi = _kpis(bench_r, bench_label)
     strat_kpi["alpha_pct"] = round(strat_kpi["cagr_pct"] - bench_kpi["cagr_pct"], 2)
 
     strat_curve = (1 + strat_r).cumprod()
@@ -329,6 +342,7 @@ def run_backtest(
         "params": {
             "years": years, "top_n": top_n,
             "cost_bps": cost_bps, "universe_size": len(stocks),
+            "market": market, "benchmark_label": bench_label.replace(" Buy & Hold", ""),
         },
         "strategy_kpi":      strat_kpi,
         "benchmark_kpi":     bench_kpi,

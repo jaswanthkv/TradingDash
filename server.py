@@ -139,10 +139,14 @@ def _strip_partial_month(result: dict) -> dict:
     return result
 
 
-# In-memory caches — seeded from DB on startup
-_min_bt_cache: dict    = db.get_latest_backtest(strategy="minervini")
-_min_bt_running: bool  = False
-_min_bt_progress: dict = {"step": 0, "total": 5, "msg": ""}
+# In-memory caches — seeded from DB on startup, keyed by market (india | us)
+def _min_db_key(market: str) -> str:
+    return "minervini" if market == "india" else f"minervini_{market}"
+
+_min_markets = ("india", "us")
+_min_caches:  dict = {m: db.get_latest_backtest(strategy=_min_db_key(m)) for m in _min_markets}
+_min_running: dict = {m: False for m in _min_markets}
+_min_progress: dict = {m: {"step": 0, "total": 5, "msg": ""} for m in _min_markets}
 
 # ── Auto-refresh helpers ─────────────────────────────────────────────────────
 
@@ -159,29 +163,30 @@ def _is_stale(cache: dict) -> bool:
         return True
 
 
-def _bg_run_minervini(years: int = 5, top_n: int = 20, cost_bps: float = 20):
-    global _min_bt_running, _min_bt_cache, _min_bt_progress
-    if _min_bt_running:
+def _bg_run_minervini(years: int = 5, top_n: int = 20, cost_bps: float = 20,
+                      market: str = "india"):
+    if _min_running[market]:
         return
     import minervini as mv
-    _min_bt_running = True
-    _min_bt_progress = {"step": 0, "total": 5, "msg": "Auto-refresh…"}
+    _min_running[market] = True
+    _min_progress[market] = {"step": 0, "total": 5, "msg": "Auto-refresh…"}
     def _cb(step, total, msg):
-        _min_bt_progress.update({"step": step, "total": total, "msg": msg})
+        _min_progress[market].update({"step": step, "total": total, "msg": msg})
     try:
-        result = mv.run_backtest(years=years, top_n=top_n, cost_bps=cost_bps, progress_cb=_cb)
-        _min_bt_cache = result
-        db.save_backtest(years, top_n, cost_bps, result, strategy="minervini")
+        result = mv.run_backtest(years=years, top_n=top_n, cost_bps=cost_bps,
+                                 progress_cb=_cb, market=market)
+        _min_caches[market] = result
+        db.save_backtest(years, top_n, cost_bps, result, strategy=_min_db_key(market))
     except Exception as e:
-        print(f"[auto-refresh] minervini failed: {e}")
+        print(f"[auto-refresh] minervini ({market}) failed: {e}")
     finally:
-        _min_bt_running = False
+        _min_running[market] = False
 
 
 def _startup_auto_refresh():
-    """Run once 30 s after boot — re-runs the backtest if not updated this month."""
+    """Run once 30 s after boot — re-runs the India backtest if stale this month."""
     time.sleep(30)
-    if _is_stale(_min_bt_cache) and not _min_bt_running:
+    if _is_stale(_min_caches["india"]) and not _min_running["india"]:
         print("[auto-refresh] minervini backtest is stale — starting background run")
         _bg_run_minervini()
 
@@ -204,43 +209,50 @@ class MinerviniParams(BaseModel):
     years:    int   = 5
     top_n:    int   = 20
     cost_bps: float = 20
+    market:   str   = "india"
+
+
+def _norm_market(market: str) -> str:
+    return market if market in _min_markets else "india"
 
 
 @app.post("/api/minervini/backtest/run")
 async def minervini_backtest_run(params: MinerviniParams):
-    global _min_bt_running
-    if _min_bt_running:
+    market = _norm_market(params.market)
+    if _min_running[market]:
         raise HTTPException(409, "Trend Breakout backtest already running")
     import minervini as mv
 
     def _run():
-        global _min_bt_running, _min_bt_cache, _min_bt_progress
-        _min_bt_running = True
-        _min_bt_progress = {"step": 0, "total": 5, "msg": "Starting…"}
+        _min_running[market] = True
+        _min_progress[market] = {"step": 0, "total": 5, "msg": "Starting…"}
         def _on_progress(step, total, msg):
-            _min_bt_progress.update({"step": step, "total": total, "msg": msg})
+            _min_progress[market].update({"step": step, "total": total, "msg": msg})
         try:
             result = mv.run_backtest(
                 years=params.years, top_n=params.top_n, cost_bps=params.cost_bps,
-                progress_cb=_on_progress,
+                progress_cb=_on_progress, market=market,
             )
-            _min_bt_cache = result
+            _min_caches[market] = result
             db.save_backtest(params.years, params.top_n, params.cost_bps, result,
-                             strategy="minervini")
+                             strategy=_min_db_key(market))
             return result
         finally:
-            _min_bt_running = False
+            _min_running[market] = False
 
     loop   = asyncio.get_event_loop()
     result = await loop.run_in_executor(_executor, _run)
-    return _minervini_view(result)
+    return _minervini_view(result, market)
 
 
-def _minervini_view(cache: dict) -> dict:
+def _minervini_view(cache: dict, market: str = "india") -> dict:
     """Strip the partial current month and lock current-month holdings to the
     held snapshot. Used by BOTH the run and result endpoints so a fresh run
-    never shows the raw partial-month return (e.g. June 6.4%)."""
+    never shows the raw partial-month return (e.g. June 6.4%). The held-snapshot
+    lock only applies to India (the only market traded via Kite)."""
     result = _strip_partial_month(cache)
+    if market != "india":
+        return result
     snap = _held_holdings("minervini")
     rh   = result.get("rebalance_history", [])
     # Only lock a rebalance row to the snapshot when the snapshot actually
@@ -256,16 +268,18 @@ def _minervini_view(cache: dict) -> dict:
 
 
 @app.get("/api/minervini/backtest/result")
-def minervini_backtest_result():
-    if not _min_bt_cache:
+def minervini_backtest_result(market: str = "india"):
+    market = _norm_market(market)
+    if not _min_caches[market]:
         raise HTTPException(404, "No Trend Breakout backtest result — run one first")
-    return _minervini_view(_min_bt_cache)
+    return _minervini_view(_min_caches[market], market)
 
 
 @app.get("/api/minervini/backtest/status")
-def minervini_backtest_status():
-    return {"running": _min_bt_running, "has_result": bool(_min_bt_cache),
-            "progress": _min_bt_progress}
+def minervini_backtest_status(market: str = "india"):
+    market = _norm_market(market)
+    return {"running": _min_running[market], "has_result": bool(_min_caches[market]),
+            "progress": _min_progress[market], "market": market}
 
 
 # ── Kite auth ────────────────────────────────────────────────────────────────
@@ -308,25 +322,36 @@ def _next_rebalance() -> dict:
     return {"date": r.isoformat(), "days_left": (r - today).days, "label": r.strftime("%b %d")}
 
 
+def _portfolio_tickers(market: str) -> list:
+    """Current model-portfolio holdings for a market. India prefers the executed
+    Kite snapshot; US uses the latest backtest rebalance (no broker)."""
+    if market == "india":
+        snap = _held_holdings("minervini")
+        if snap:
+            return snap
+    cache = _min_caches.get(market) or {}
+    rh = cache.get("rebalance_history", [])
+    return rh[-1].get("holdings", []) if rh else []
+
+
+def _benchmark_for(market: str):
+    """(yfinance symbol, display label) for a market's benchmark index."""
+    return ("^GSPC", "S&P 500") if market == "us" else ("^CRSLDX", "Nifty 500")
+
+
 @app.get("/api/portfolio/daily-change")
-async def portfolio_daily_change():
-    """Daily % change for the Trend Breakout strategy portfolio vs Nifty 500."""
+async def portfolio_daily_change(market: str = "india"):
+    """Daily % change for the Trend Breakout model portfolio vs its benchmark."""
     import yfinance as yf
     import numpy as np
 
-    # Held holdings: prefer executed snapshot, else last backtest rebalance
-    min_tickers_now = []
-    if _min_bt_cache:
-        rh = _min_bt_cache.get("rebalance_history", [])
-        snap = _held_holdings("minervini")
-        if snap:
-            min_tickers_now = snap
-        elif rh:
-            min_tickers_now = rh[-1].get("holdings", [])
+    market = _norm_market(market)
+    bench_sym, bench_label = _benchmark_for(market)
 
+    min_tickers_now = _portfolio_tickers(market)
     min_tickers_mtd = min_tickers_now
 
-    all_tickers = list(set(min_tickers_now + min_tickers_mtd + ["^CRSLDX"]))
+    stock_tickers = list(set(min_tickers_now + min_tickers_mtd))
     from datetime import date as _date, timedelta as _td
     today       = _date.today()
     month_start = today.replace(day=1)
@@ -335,11 +360,21 @@ async def portfolio_daily_change():
     pre_start   = (month_start - _td(days=8)).strftime("%Y-%m-%d")
     month_start_str = month_start.strftime("%Y-%m-%d")
 
+    def _close_frame(syms):
+        raw = yf.download(syms, start=pre_start, interval="1d",
+                          auto_adjust=True, progress=False, threads=True)
+        return raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+
     def _fetch():
-        # Single download covers Today, MTD, and entry prices — same prices, no divergence.
-        raw_m = yf.download(all_tickers, start=pre_start, interval="1d",
-                            auto_adjust=True, progress=False, threads=True)
-        cm = raw_m["Close"] if isinstance(raw_m.columns, pd.MultiIndex) else raw_m
+        # Fetch stocks and the benchmark SEPARATELY — index symbols (^GSPC, ^CRSLDX)
+        # often return NaN when batched with many stocks in one yfinance call.
+        cs = _close_frame(stock_tickers) if stock_tickers else pd.DataFrame()
+        cb = _close_frame([bench_sym])
+        if isinstance(cb, pd.Series):
+            cb = cb.to_frame(name=bench_sym)
+        elif bench_sym not in cb.columns and len(cb.columns) == 1:
+            cb = cb.rename(columns={cb.columns[0]: bench_sym})
+        cm = pd.concat([cs, cb], axis=1)
         cm = cm.dropna(how="all")
         cm.index = pd.to_datetime(cm.index).tz_localize(None)
 
@@ -383,30 +418,33 @@ async def portfolio_daily_change():
         vals = [src[t] for t in tickers if t in src]
         return round(float(np.mean(vals)), 2) if vals else None
 
-    bm    = cm["^CRSLDX"].dropna() if "^CRSLDX" in cm.columns else pd.Series(dtype=float)
+    bm    = cm[bench_sym].dropna() if bench_sym in cm.columns else pd.Series(dtype=float)
     as_of = str(bm.index[-1])[:10] if len(bm) >= 1 else ""
     prev  = str(bm.index[-2])[:10] if len(bm) >= 2 else ""
 
-    # Prefer Kite for the Nifty 500 benchmark — yfinance's ^CRSLDX index lags ~a
-    # day, producing wrong Today/MTD numbers. Falls back to yfinance if unavailable.
-    kb = await loop.run_in_executor(_executor, _nifty500_kite_series)
-    if kb is not None and len(kb) >= 2:
-        changes["^CRSLDX"] = round((kb.iloc[-1] / kb.iloc[-2] - 1) * 100, 2)
-        kb_cur = kb[kb.index >= pd.Timestamp(month_start_str)]
-        if not kb_cur.empty:
-            base = kb_cur.iloc[0]   # first close of current month (matches portfolio)
-            mtd["^CRSLDX"] = round((kb_cur.iloc[-1] / base - 1) * 100, 2)
-        as_of = str(kb.index[-1].date())
-        prev  = str(kb.index[-2].date())
+    # India only: prefer Kite for the Nifty 500 benchmark — yfinance's ^CRSLDX
+    # index lags ~a day. US uses ^GSPC from yfinance directly.
+    if market == "india":
+        kb = await loop.run_in_executor(_executor, _nifty500_kite_series)
+        if kb is not None and len(kb) >= 2:
+            changes[bench_sym] = round((kb.iloc[-1] / kb.iloc[-2] - 1) * 100, 2)
+            kb_cur = kb[kb.index >= pd.Timestamp(month_start_str)]
+            if not kb_cur.empty:
+                base = kb_cur.iloc[0]   # first close of current month (matches portfolio)
+                mtd[bench_sym] = round((kb_cur.iloc[-1] / base - 1) * 100, 2)
+            as_of = str(kb.index[-1].date())
+            prev  = str(kb.index[-2].date())
 
     return {
-        "nifty500":        changes.get("^CRSLDX"),
+        "market":          market,
+        "benchmark_label": bench_label,
+        "nifty500":        changes.get(bench_sym),
         "min_portfolio":   _port_avg(min_tickers_now, changes),
         "min_stocks":      {t.replace(".NS",""): changes.get(t)
                             for t in set(min_tickers_now) | set(min_tickers_mtd) if changes.get(t) is not None},
         "as_of":           as_of,
         "prev_close_date": prev,
-        "mtd_nifty500":       mtd.get("^CRSLDX"),
+        "mtd_nifty500":       mtd.get(bench_sym),
         "mtd_min_portfolio":  _port_avg(min_tickers_mtd, mtd),
         "mtd_min_stocks":     {t.replace(".NS",""): mtd.get(t)
                                for t in set(min_tickers_mtd) | set(min_tickers_now) if mtd.get(t) is not None},
@@ -417,25 +455,24 @@ async def portfolio_daily_change():
 
 
 @app.get("/api/portfolio/vs-index")
-async def portfolio_vs_index(months: int = 3, from_month_start: bool = False):
+async def portfolio_vs_index(months: int = 3, from_month_start: bool = False,
+                             market: str = "india"):
     """Cumulative growth curve (rebased to 100) of the current Trend Breakout
-    portfolio — equal-weighted current holdings — vs Nifty 500. Spans the last
-    `months` months, or the current calendar month-to-date when
+    portfolio — equal-weighted current holdings — vs its benchmark. Spans the
+    last `months` months, or the current calendar month-to-date when
     `from_month_start` is set. Powers the 'My Portfolio vs Index' chart."""
     import yfinance as yf
     import numpy as np
 
     months = max(1, min(months, 24))
+    market = _norm_market(market)
+    bench_sym, bench_label = _benchmark_for(market)
 
-    # Current holdings: prefer executed snapshot, else last backtest rebalance.
-    tickers = _held_holdings("minervini")
-    if not tickers and _min_bt_cache:
-        rh = _min_bt_cache.get("rebalance_history", [])
-        if rh:
-            tickers = rh[-1].get("holdings", [])
+    tickers = _portfolio_tickers(market)
     if not tickers:
         return {"dates": [], "portfolio_curve": [], "benchmark_curve": [],
-                "tickers": [], "months": months}
+                "tickers": [], "months": months, "market": market,
+                "benchmark_label": bench_label}
 
     if from_month_start:
         start_d   = date.today().replace(day=1)        # rebase to 1st trading day of month
@@ -445,10 +482,21 @@ async def portfolio_vs_index(months: int = 3, from_month_start: bool = False):
         kite_days = months * 31 + 7
     start = start_d.strftime("%Y-%m-%d")
 
-    def _build():
-        raw = yf.download(list(set(tickers)) + ["^CRSLDX"], start=start, interval="1d",
+    def _close_frame(syms):
+        raw = yf.download(syms, start=start, interval="1d",
                           auto_adjust=True, progress=False, threads=True)
-        cm = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+        return raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+
+    def _build():
+        # Fetch stocks and benchmark separately — index symbols often return NaN
+        # when batched with many stocks in a single yfinance call.
+        cs = _close_frame(list(set(tickers)))
+        cb = _close_frame([bench_sym])
+        if isinstance(cb, pd.Series):
+            cb = cb.to_frame(name=bench_sym)
+        elif bench_sym not in cb.columns and len(cb.columns) == 1:
+            cb = cb.rename(columns={cb.columns[0]: bench_sym})
+        cm = pd.concat([cs, cb], axis=1)
         cm = cm.dropna(how="all")
         cm.index = pd.to_datetime(cm.index).tz_localize(None).normalize()
 
@@ -462,13 +510,13 @@ async def portfolio_vs_index(months: int = 3, from_month_start: bool = False):
         norm = port_px / port_px.iloc[0]
         port = (norm.mean(axis=1) / norm.mean(axis=1).iloc[0] * 100).round(2)
 
-        # ── Benchmark: prefer Kite series, else yfinance ^CRSLDX ─────────────
-        kb = _nifty500_kite_series(days=kite_days)
+        # ── Benchmark: India prefers Kite series; US (and fallback) uses yfinance.
+        kb = _nifty500_kite_series(days=kite_days) if market == "india" else None
         if kb is not None and len(kb) >= 2:
             bench_src = kb
             bench_src.index = pd.to_datetime(bench_src.index).tz_localize(None).normalize()
-        elif "^CRSLDX" in cm.columns:
-            bench_src = cm["^CRSLDX"].dropna()
+        elif bench_sym in cm.columns:
+            bench_src = cm[bench_sym].dropna()
         else:
             bench_src = pd.Series(dtype=float)
 
@@ -500,37 +548,40 @@ async def portfolio_vs_index(months: int = 3, from_month_start: bool = False):
         "tickers":         [t.replace(".NS", "") for t in tickers],
         "months":          months,
         "from_month_start": from_month_start,
+        "market":          market,
+        "benchmark_label": bench_label,
     }
 
 
 @app.get("/api/portfolio/strategies")
-def portfolio_strategies():
-    """Current Trend Breakout strategy picks — no Kite required."""
-    result = {"minervini": None, "next_rebalance": _next_rebalance()}
+def portfolio_strategies(market: str = "india"):
+    """Current Trend Breakout strategy picks for a market — no Kite required."""
+    market = _norm_market(market)
+    _, bench_label = _benchmark_for(market)
+    result = {"minervini": None, "next_rebalance": _next_rebalance(),
+              "market": market, "benchmark_label": bench_label}
 
-    if _min_bt_cache:
-        rh_min = _min_bt_cache.get("rebalance_history", [])
-        if rh_min:
-            last_min = rh_min[-1]
-            screen_map = {s["symbol"]: s for s in _min_bt_cache.get("current_screen", [])}
-            # Prefer the executed snapshot (what you actually hold); else backtest pick.
-            snapshot = _load_held().get("minervini", {})
-            tickers  = snapshot.get("holdings") or last_min.get("holdings", [])
-            as_of    = snapshot.get("as_of") or last_min.get("date")
-            holdings = []
-            for sym_ns in tickers:
-                sym = sym_ns.replace(".NS", "")
-                sc  = screen_map.get(sym, {})
-                holdings.append({
-                    "symbol":    sym,
-                    "ticker":    sym_ns,
-                    "rs_rating": sc.get("rs_rating"),
-                    "price":     sc.get("price"),
-                })
-            result["minervini"] = {
-                "as_of":    as_of,
-                "holdings": holdings,
-            }
+    cache = _min_caches.get(market) or {}
+    rh_min = cache.get("rebalance_history", [])
+    if rh_min:
+        last_min = rh_min[-1]
+        screen_map = {s["symbol"]: s for s in cache.get("current_screen", [])}
+        # India: prefer the executed Kite snapshot (what you actually hold).
+        # US: no broker — always the latest backtest pick.
+        snapshot = _load_held().get("minervini", {}) if market == "india" else {}
+        tickers  = snapshot.get("holdings") or last_min.get("holdings", [])
+        as_of    = snapshot.get("as_of") or last_min.get("date")
+        holdings = []
+        for sym_ns in tickers:
+            sym = sym_ns.replace(".NS", "")
+            sc  = screen_map.get(sym, {})
+            holdings.append({
+                "symbol":    sym,
+                "ticker":    sym_ns,
+                "rs_rating": sc.get("rs_rating"),
+                "price":     sc.get("price"),
+            })
+        result["minervini"] = {"as_of": as_of, "holdings": holdings}
 
     return result
 
@@ -912,8 +963,8 @@ async def orders_execute(params: OrderParams):
 @app.get("/api/report/status")
 def report_refresh_status():
     return {
-        "minervini_running": _min_bt_running,
-        "minervini_stale":   _is_stale(_min_bt_cache),
+        "minervini_running": _min_running["india"],
+        "minervini_stale":   _is_stale(_min_caches["india"]),
     }
 
 
@@ -970,7 +1021,7 @@ def monthly_report():
         }
 
     cards = [
-        _card("Trend Breakout",        _min_bt_cache, "#f59e0b"),
+        _card("Trend Breakout",        _min_caches["india"], "#f59e0b"),
     ]
 
     def _pct(v, decimals=1):

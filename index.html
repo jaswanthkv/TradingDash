@@ -37,14 +37,32 @@
 body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--t1);font-size:13px}
 a{color:inherit;text-decoration:none}
 
-/* ── nav ── */
-.nav{height:52px;background:var(--surface);border-bottom:1px solid var(--border);
-  display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100;
-  box-shadow:0 1px 3px var(--shadow)}
-.logo{font-size:15px;font-weight:700;color:var(--t1);letter-spacing:-.3px}
-.logo span{color:var(--accent)}
-.nav-right{margin-left:auto;display:flex;align-items:center;gap:10px}
-.last-upd{font-size:11px;color:var(--t3)}
+/* ── left sidebar ── */
+.sidebar{position:fixed;top:0;left:0;width:224px;height:100vh;background:var(--surface);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;
+  box-shadow:1px 0 3px var(--shadow)}
+.side-brand{height:60px;display:flex;align-items:center;padding:0 22px;
+  border-bottom:1px solid var(--border-inner)}
+.side-logo{font-size:18px;font-weight:800;color:var(--t1);letter-spacing:-.5px}
+.side-logo span{color:var(--accent)}
+.side-logo-sm{display:none;font-size:18px;font-weight:800;color:var(--t1)}
+.side-logo-sm span{color:var(--accent)}
+.side-nav{flex:1;display:flex;flex-direction:column;gap:3px;padding:14px 12px;overflow-y:auto}
+.side-foot{padding:12px 14px;border-top:1px solid var(--border-inner);
+  display:flex;flex-direction:column;gap:9px}
+.side-foot-btns{display:flex;gap:8px}
+.last-upd{font-size:10px;color:var(--t3)}
+.main{margin-left:224px;min-height:100vh}
+@media(max-width:900px){
+  .sidebar{width:64px}
+  .side-brand{justify-content:center;padding:0}
+  .side-logo{display:none}.side-logo-sm{display:inline}
+  .side-nav{padding:14px 8px}
+  .tab{justify-content:center;padding:11px 0}
+  .tab .tl{display:none}
+  .side-foot{align-items:center}.last-upd{display:none}
+  .main{margin-left:64px}
+}
 .btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .15s}
 .btn-primary{background:var(--accent);color:#fff}
 .btn-primary:hover{background:var(--accent-h)}
@@ -56,12 +74,16 @@ a{color:inherit;text-decoration:none}
   border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .15s}
 .btn-icon:hover{background:var(--border)}
 
-/* ── top tabs ── */
-.tab-bar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;padding:0 20px}
-.tab{padding:12px 16px;font-size:12px;font-weight:600;color:var(--t3);border:none;background:none;
-  cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
-.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
-.tab:hover:not(.active){color:var(--t4)}
+/* ── sidebar nav items ── */
+.tab{display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;border-radius:9px;
+  font-size:13px;font-weight:600;color:var(--t2);border:none;background:none;cursor:pointer;
+  text-align:left;transition:all .15s;position:relative}
+.tab .ti{font-size:16px;width:20px;text-align:center;flex-shrink:0;opacity:.8}
+.tab:hover:not(.active){background:var(--border-inner);color:var(--t1)}
+.tab.active{background:var(--accent-subtle);color:var(--accent-text)}
+.tab.active .ti{opacity:1}
+.tab.active::before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:3px;height:18px;border-radius:0 3px 3px 0;background:var(--accent)}
 .tab-pane{display:none}.tab-pane.active{display:block}
 
 /* ── sub-tabs ── */
@@ -382,15 +404,29 @@ html{scroll-behavior:smooth}
 </head>
 <body>
 
-<!-- ── nav ── -->
-<div class="nav">
-  <div class="logo">Quant<span>Desk</span></div>
-  <div class="nav-right">
-    <span class="last-upd" id="navUpdated"></span>
-    <button class="btn btn-ghost btn-sm" onclick="location.reload()">↺ Refresh</button>
-    <button class="btn-icon" id="darkToggleBtn" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
+<!-- ── left sidebar ── -->
+<aside class="sidebar">
+  <div class="side-brand">
+    <span class="side-logo">Quant<span>Desk</span></span>
+    <span class="side-logo-sm">Q<span>D</span></span>
   </div>
-</div>
+  <nav class="side-nav">
+    <button class="tab active" onclick="switchTab('home',this)"><span class="ti">🏠</span><span class="tl">Home</span></button>
+    <button class="tab" id="tabPortfolio" onclick="switchTab('portfolio',this)"><span class="ti">💼</span><span class="tl">Portfolio</span></button>
+    <button class="tab" onclick="switchTab('minervini',this)"><span class="ti">📈</span><span class="tl">Trend Breakout</span></button>
+    <button class="tab" onclick="switchTab('ha',this)"><span class="ti">⚡</span><span class="tl">Pulse</span></button>
+  </nav>
+  <div class="side-foot">
+    <span class="last-upd" id="navUpdated"></span>
+    <div class="side-foot-btns">
+      <button class="btn btn-ghost btn-sm" style="flex:1" onclick="location.reload()" title="Refresh">↺ Refresh</button>
+      <button class="btn-icon" id="darkToggleBtn" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
+    </div>
+  </div>
+</aside>
+
+<!-- ── main content ── -->
+<main class="main">
 
 <!-- ── KPI bar (hidden on home) ── -->
 <div class="kpi-bar" id="kpiBar" style="display:none">
@@ -403,7 +439,7 @@ html{scroll-behavior:smooth}
   </div>
   <div class="kpi">
     <div class="kpi-group">&nbsp;</div>
-    <div class="kpi-label">Nifty 500 CAGR</div>
+    <div class="kpi-label" id="k-bcagr-label">Nifty 500 CAGR</div>
     <div class="kpi-value" id="k-bcagr">—</div>
     <div class="kpi-sub" id="k-bperiod">—</div>
   </div>
@@ -454,15 +490,6 @@ html{scroll-behavior:smooth}
   </div>
 </div>
 
-<!-- ── tab bar ── -->
-<div class="tab-bar">
-  <button class="tab active" onclick="switchTab('home',this)">Home</button>
-  <button class="tab" onclick="switchTab('portfolio',this)" id="tabPortfolio">Portfolio</button>
-  <button class="tab" onclick="switchTab('minervini',this)">Trend Breakout</button>
-  <button class="tab" onclick="switchTab('ha',this)">Pulse</button>
-  <button class="tab" onclick="switchTab('report',this)">Report</button>
-</div>
-
 <!-- ════════════════════ HOME TAB ════════════════════ -->
 <div class="tab-pane active" id="tab-home">
 
@@ -511,6 +538,10 @@ html{scroll-behavior:smooth}
   <!-- meta bar -->
   <div class="port-meta">
     <span style="font-weight:700;color:var(--t1)">Strategy Portfolios</span>
+    <select id="pf-market" onchange="onPfMarketChange()" style="font-size:12px;padding:3px 6px">
+      <option value="india" selected>🇮🇳 India · Nifty</option>
+      <option value="us">🇺🇸 US · S&amp;P 500</option>
+    </select>
     <span id="portLastUpd" class="d" style="font-size:11px">—</span>
     <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
       <span id="portRebalBadge" class="rebal-badge" style="display:none"></span>
@@ -557,7 +588,7 @@ html{scroll-behavior:smooth}
           <span id="dayAsOf" class="perf-card-date"></span>
         </div>
         <div class="perf-row">
-          <span class="perf-name">Nifty 500</span>
+          <span class="perf-name" id="dayBenchLabel">Nifty 500</span>
           <div class="perf-right"><span id="dayN500" class="perf-val">—</span></div>
         </div>
         <div class="perf-row">
@@ -577,7 +608,7 @@ html{scroll-behavior:smooth}
           </div>
         </div>
         <div class="perf-row">
-          <span class="perf-name">Nifty 500</span>
+          <span class="perf-name" id="mtdBenchLabel">Nifty 500</span>
           <div class="perf-right"><span id="mtdN500" class="perf-val">—</span></div>
         </div>
         <div class="perf-row">
@@ -594,7 +625,7 @@ html{scroll-behavior:smooth}
     <div class="page">
       <div class="card">
         <div class="card-head">
-          <span class="card-title">📈 My Portfolio vs Nifty 500</span>
+          <span class="card-title" id="vsIndexTitle">📈 My Portfolio vs Nifty 500</span>
           <div style="display:flex;align-items:center;gap:12px">
             <span id="vsIndexMeta" class="d" style="font-size:11px">—</span>
             <div id="vsIndexRange" style="display:flex;gap:4px">
@@ -662,6 +693,14 @@ html{scroll-behavior:smooth}
   <div class="min-pane active" id="min-backtest">
     <div class="param-row">
       <div class="param-group">
+        <label>Market</label>
+        <select id="mv-market" onchange="onMarketChange()">
+          <option value="india" selected>🇮🇳 India · Nifty</option>
+          <option value="us">🇺🇸 US · S&amp;P 500</option>
+        </select>
+      </div>
+      <div class="param-sep">·</div>
+      <div class="param-group">
         <label>Years</label>
         <select id="mv-years">
           <option value="3">3 years</option>
@@ -707,17 +746,17 @@ html{scroll-behavior:smooth}
       <div class="page" style="display:grid;gap:16px">
         <div class="card">
           <div class="card-head">
-            <span class="card-title">Portfolio Growth (₹1 invested)</span>
+            <span class="card-title" id="minGrowthTitle">Portfolio Growth (₹1 invested)</span>
             <div style="display:flex;gap:16px;font-size:11px;color:var(--t2)">
               <span><span style="color:var(--accent)">●</span> Trend Breakout</span>
-              <span><span style="color:var(--t3)">●</span> Nifty 500</span>
+              <span><span style="color:var(--t3)">●</span> <span id="minGrowthLegendBench">Nifty 500</span></span>
             </div>
           </div>
           <div class="chart-wrap"><canvas id="minGrowthChart"></canvas></div>
         </div>
         <div class="card">
           <div class="card-head">
-            <span class="card-title">Monthly Returns Heatmap — Strategy vs Nifty 500</span>
+            <span class="card-title" id="minHeatTitle">Monthly Returns Heatmap — Strategy vs Nifty 500</span>
             <span style="font-size:11px;color:var(--t3)">green = positive · red = negative</span>
           </div>
           <div class="card-body" style="padding:0">
@@ -1044,39 +1083,7 @@ html{scroll-behavior:smooth}
   </div>
 </div>
 
-<!-- ════════════════════ REPORT TAB ════════════════════ -->
-<div class="tab-pane" id="tab-report">
-  <div class="page" style="max-width:720px;margin:0 auto;padding:32px 20px">
-
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
-      <div>
-        <div style="font-size:20px;font-weight:800;color:var(--t1);letter-spacing:-.3px" id="reportTitle">Monthly Report</div>
-        <div style="font-size:12px;color:var(--t3);margin-top:3px">Performance snapshot · NSE systematic strategies</div>
-      </div>
-      <a href="/report" target="_blank" class="btn btn-ghost btn-sm">↗ Open full-page</a>
-    </div>
-
-    <div id="reportEmpty" style="text-align:center;padding:60px 20px;color:var(--t3)">
-      <div style="font-size:32px;margin-bottom:12px">📊</div>
-      <div style="font-size:14px;font-weight:600;margin-bottom:6px">No backtest data yet</div>
-      <div style="font-size:12px">Run the Trend Breakout backtest first, then come back here.</div>
-    </div>
-
-    <div id="reportCards" class="hidden" style="display:flex;flex-direction:column;gap:20px"></div>
-
-    <div id="reportFooter" class="hidden" style="margin-top:24px;padding:14px 20px;
-      background:var(--surface);border:1px solid var(--border);border-radius:10px;
-      display:flex;align-items:center;justify-content:space-between">
-      <div style="font-size:12px;font-weight:700;color:var(--t1)">Quant<span style="color:var(--accent)">Desk</span></div>
-      <div style="font-size:11px;color:var(--t3)" id="reportFooterMeta"></div>
-    </div>
-    <div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.7">
-      All returns are from walk-forward backtests on NSE-listed equities. Past performance does not
-      guarantee future results. Transaction costs included. Returns shown in INR.
-    </div>
-
-  </div>
-</div>
+</main>
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -1118,7 +1125,7 @@ function switchTab(name, el) {
   history.replaceState(null, '', '#' + name);
 
   // KPI bar: hide on home and portfolio (portfolio has its own KPI section)
-  document.getElementById('kpiBar').style.display = (name === 'home' || name === 'portfolio' || name === 'report') ? 'none' : '';
+  document.getElementById('kpiBar').style.display = (name === 'home' || name === 'portfolio') ? 'none' : '';
 
   if (name === 'portfolio') {
     loadPortfolio();
@@ -1133,12 +1140,6 @@ function switchTab(name, el) {
     if (window._minData) renderKPIs(window._minData);
     clearTimeout(_pulseRefreshTimer);
     clearInterval(_pulseCountdownTimer);
-  } else if (name === 'report') {
-    clearTimeout(_pulseRefreshTimer);
-    clearInterval(_pulseCountdownTimer);
-    document.getElementById('kpiBar').style.display = 'none';
-    renderReport();
-    _startReportPoll();
   }
 }
 
@@ -1148,16 +1149,24 @@ const clr  = v => v == null ? '' : v >= 0 ? 'g' : 'r';
 const fmt  = (v, d=2) => v == null ? '—' : v.toFixed(d);
 const INR  = v => v == null ? '—' : '₹' + v.toLocaleString('en-IN', {maximumFractionDigits:2});
 
+// Benchmark display name: prefer the saved label, else infer from market.
+function _benchLabel(d) {
+  const p = d.params || {};
+  return p.benchmark_label || (p.market === 'us' ? 'S&P 500' : 'Nifty 500');
+}
+
 // ── KPI bar ───────────────────────────────────────────────────────────────────
 function renderKPIs(d) {
   const sk = d.strategy_kpi, bk = d.benchmark_kpi;
   const yrs = d.params.years;
+  const bench = _benchLabel(d);
 
   setText('k-cagr',   pct(sk.cagr_pct));
   const alpha = sk.alpha_pct ?? 0;
-  setText('k-alpha',  `${alpha >= 0 ? '+' : ''}${alpha.toFixed(1)}% alpha vs Nifty`);
+  setText('k-alpha',  `${alpha >= 0 ? '+' : ''}${alpha.toFixed(1)}% alpha vs ${bench}`);
   setText('k-bcagr',  pct(bk.cagr_pct));
-  setText('k-bperiod',`Nifty 500 · ${yrs}y`);
+  setText('k-bcagr-label', `${bench} CAGR`);
+  setText('k-bperiod',`${bench} · ${yrs}y`);
   setText('k-sharpe', fmt(sk.sharpe));
   setText('k-sortino',`Sortino ${fmt(sk.sortino)}`);
   setText('k-mdd',    pct(sk.max_dd_pct, 1));
@@ -1230,12 +1239,23 @@ function renderHeatmap(rows, benchRows, targetId = 'heatmapWrap') {
 // ── Portfolio ─────────────────────────────────────────────────────────────────
 let _portData = null;
 let _dayData  = null;
+let _pfMarket = 'india';
+
+function _pfMkt() { return document.getElementById('pf-market')?.value || 'india'; }
+
+// Market toggle → reload the whole Portfolio tab for the selected market.
+function onPfMarketChange() {
+  _pfMarket = _pfMkt();
+  _portData = null; _dayData = null;
+  loadPortfolio(true);
+}
 
 async function loadPortfolio(force = false) {
+  _pfMarket = _pfMkt();
   if (_portData && !force) { renderPortfolio(_portData); return; }
   show('portLoading'); hide('portContent'); hide('portError');
   try {
-    const d = await fetch(API + '/api/portfolio/strategies').then(r => r.json());
+    const d = await fetch(API + '/api/portfolio/strategies?market=' + _pfMarket).then(r => r.json());
     _portData = d;
     renderPortfolio(d);
     loadDayChange();   // fetch daily changes in background
@@ -1249,7 +1269,7 @@ async function loadPortfolio(force = false) {
 
 async function loadDayChange() {
   try {
-    const d = await fetch(API + '/api/portfolio/daily-change').then(r => r.json());
+    const d = await fetch(API + '/api/portfolio/daily-change?market=' + _pfMarket).then(r => r.json());
     _dayData = d;
     renderDayChange(d);
   } catch(_) {}
@@ -1263,7 +1283,7 @@ async function loadVsIndex(range = _vsRange) {
   _vsRange = range;
   document.querySelectorAll('.vs-range').forEach(b =>
     b.classList.toggle('active', b.dataset.r === String(range)));
-  const qs = range === 'mtd' ? 'from_month_start=true' : 'months=' + range;
+  const qs = (range === 'mtd' ? 'from_month_start=true' : 'months=' + range) + '&market=' + _pfMarket;
   try {
     const d = await fetch(API + '/api/portfolio/vs-index?' + qs).then(r => r.json());
     renderVsIndex(d);
@@ -1280,11 +1300,13 @@ function renderVsIndex(d) {
   }
   hide('vsIndexEmpty'); show('vsIndexChartWrap');
 
+  const bench = d.benchmark_label || 'Nifty 500';
+  setText('vsIndexTitle', `📈 My Portfolio vs ${bench}`);
   const pr = d.port_return, br = d.bench_return;
   if (pr != null && br != null) {
     const alpha = pr - br;
     document.getElementById('vsIndexMeta').innerHTML =
-      `Portfolio ${pr>=0?'+':''}${pr.toFixed(1)}% · Nifty 500 ${br>=0?'+':''}${br.toFixed(1)}% ` +
+      `Portfolio ${pr>=0?'+':''}${pr.toFixed(1)}% · ${bench} ${br>=0?'+':''}${br.toFixed(1)}% ` +
       `<span class="${alpha>=0?'g':'r'}">(${alpha>=0?'+':''}${alpha.toFixed(1)}%)</span>`;
   } else {
     setText('vsIndexMeta', '');
@@ -1299,7 +1321,7 @@ function renderVsIndex(d) {
       datasets: [
         { label: 'My Portfolio', data: d.portfolio_curve, borderColor: '#f59e0b',
           backgroundColor: 'rgba(245,158,11,.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1, spanGaps: true },
-        { label: 'Nifty 500', data: d.benchmark_curve, borderColor: '#94a3b8',
+        { label: bench, data: d.benchmark_curve, borderColor: '#94a3b8',
           backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, borderDash: [4,3], tension: 0.1, spanGaps: true },
       ],
     },
@@ -1332,6 +1354,10 @@ function _pctHtml(v) {
 function renderDayChange(d) {
   const fmt = dt => new Date(dt).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
 
+  const bench = d.benchmark_label || 'Nifty 500';
+  setText('dayBenchLabel', bench);
+  setText('mtdBenchLabel', bench);
+
   // ── Today ──────────────────────────────────────────────────────────────
   const n500 = d.nifty500, min = d.min_portfolio;
   document.getElementById('dayN500').innerHTML = _pctHtml(n500);
@@ -1360,8 +1386,9 @@ function renderDayChange(d) {
   const minMtd      = d.mtd_min_stocks  || {};
   const entryPrices = d.entry_prices    || {};
 
+  const ccy = d.market === 'us' ? '$' : '₹';
   const _inrHtml = v => v == null ? '<span class="d">—</span>'
-    : `<span class="sym-cell">₹${v.toLocaleString('en-IN',{maximumFractionDigits:2})}</span>`;
+    : `<span class="sym-cell">${ccy}${v.toLocaleString('en-IN',{maximumFractionDigits:2})}</span>`;
 
   // Trend Breakout: Symbol(0) RS(1) Price(2) Entry(3) Today(4) Month(5)
   document.querySelectorAll('#minPortBody tr').forEach(tr => {
@@ -1396,6 +1423,7 @@ function renderPortfolio(d) {
   if (d.minervini && d.minervini.holdings && d.minervini.holdings.length) {
     setText('minPortAsOf', 'as of ' + (d.minervini.as_of || ''));
     hide('minPortEmpty'); show('minPortTable');
+    const ccy = d.market === 'us' ? '$' : '₹';
     const tbody = document.getElementById('minPortBody');
     tbody.innerHTML = '';
     d.minervini.holdings.forEach(h => {
@@ -1403,7 +1431,7 @@ function renderPortfolio(d) {
       tbody.innerHTML += `<tr data-sym="${h.symbol}">
         <td class="sym-cell" style="font-weight:600">${h.symbol}</td>
         <td><span style="font-weight:700;color:#f59e0b">${rs}</span></td>
-        <td class="sym-cell">₹${(h.price||0).toLocaleString('en-IN')}</td>
+        <td class="sym-cell">${ccy}${(h.price||0).toLocaleString('en-IN')}</td>
         <td class="sym-cell d">—</td>
         <td class="d">—</td>
         <td class="d">—</td>
@@ -2242,23 +2270,59 @@ function switchMinTab(name, el) {
   if (name === 'screener') renderScreen();
 }
 
+function _mvMarket() {
+  return document.getElementById('mv-market')?.value || 'india';
+}
+
+// Switch market → show that market's cached result (or the empty state).
+async function onMarketChange() {
+  const market = _mvMarket();
+  hide('minResults'); show('minEmpty');
+  _minData = null; window._minData = null;
+  _screenData = [];
+  if (_activeMinTab === 'screener') renderScreen();
+  try {
+    const res = await fetch(API + '/api/minervini/backtest/result?market=' + market);
+    if (res.ok) {
+      renderMinervini(await res.json());
+    } else if (res.status === 404) {
+      showToast(`No ${market === 'us' ? 'US' : 'India'} backtest yet — click Run Backtest`, 'info');
+    } else {
+      showToast('Failed to load result: ' + (await res.text()), 'error');
+    }
+  } catch(e) {
+    showToast('Failed to load result: ' + e.message, 'error');
+  }
+}
+
 async function runMinervini() {
   const years   = +document.getElementById('mv-years').value;
   const topn    = +document.getElementById('mv-topn').value;
   const costBps = +document.getElementById('mv-cost').value;
+  const market  = _mvMarket();
 
   document.getElementById('btnMin').disabled = true;
   const statusEl = document.getElementById('minStatus');
   statusEl.classList.remove('hidden');
   statusEl.style.display = 'flex';
-  hide('minEmpty'); hide('minResults');
+  // Show a loading placeholder in the body (don't leave it blank during the
+  // 1–4 min download). minEmpty doubles as the loading panel.
+  hide('minResults');
+  const emptyEl = document.getElementById('minEmpty');
+  const eTitle = emptyEl.querySelector('.empty-title');
+  const eSub   = emptyEl.querySelector('.empty-sub');
+  const _origTitle = eTitle.textContent, _origSub = eSub.innerHTML;
+  eTitle.textContent = `Running ${market === 'us' ? 'S&P 500' : 'Nifty'} backtest…`;
+  eSub.innerHTML = 'Downloading data and running the walk-forward simulation. This can take 1–4 min for large universes.';
+  show('minEmpty');
+  const _restoreEmpty = () => { eTitle.textContent = _origTitle; eSub.innerHTML = _origSub; };
 
   const progEl = document.getElementById('minProgress');
   const msgEl  = document.getElementById('minStatusMsg');
 
   const poll = setInterval(async () => {
     try {
-      const s = await fetch(API + '/api/minervini/backtest/status').then(r => r.json());
+      const s = await fetch(API + '/api/minervini/backtest/status?market=' + market).then(r => r.json());
       if (s.progress?.total) {
         progEl.style.width = Math.round(s.progress.step / s.progress.total * 100) + '%';
         msgEl.textContent  = s.progress.msg || 'Running…';
@@ -2270,18 +2334,20 @@ async function runMinervini() {
     const res = await fetch(API + '/api/minervini/backtest/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ years, top_n: topn, cost_bps: costBps }),
+      body: JSON.stringify({ years, top_n: topn, cost_bps: costBps, market }),
     });
     clearInterval(poll);
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     renderMinervini(data);
-    showToast(`Trend Breakout backtest complete · ${years}y`, 'success');
+    const mlabel = market === 'us' ? 'S&P 500' : 'Nifty';
+    showToast(`Trend Breakout backtest complete · ${mlabel} · ${years}y`, 'success');
   } catch(e) {
     clearInterval(poll);
     msgEl.textContent = 'Error: ' + e.message;
     showToast('Trend Breakout backtest failed: ' + e.message, 'error');
   } finally {
+    _restoreEmpty();
     document.getElementById('btnMin').disabled = false;
     statusEl.style.display = 'none';
   }
@@ -2293,45 +2359,52 @@ function renderMinervini(d) {
   hide('minEmpty');
   show('minResults');
 
-  if (_activeTab === 'minervini') renderKPIs(d);
-  if (_activeTab === 'report') renderReport();
+  const bench = _benchLabel(d);
+  const ccy   = d.params?.market === 'us' ? '$1' : '₹1';
+  setText('minGrowthTitle', `Portfolio Growth (${ccy} invested)`);
+  setText('minGrowthLegendBench', bench);
+  setText('minHeatTitle', `Monthly Returns Heatmap — Strategy vs ${bench}`);
+
+  try { if (_activeTab === 'minervini') renderKPIs(d); } catch(e) { console.error('renderKPIs', e); }
 
   // Growth chart
-  const ctx = document.getElementById('minGrowthChart').getContext('2d');
-  if (_minChart) _minChart.destroy();
-  _minChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: d.dates,
-      datasets: [
-        { label: 'Trend Breakout', data: d.strategy_curve, borderColor: '#6366f1',
-          backgroundColor: 'rgba(99,102,241,.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1 },
-        { label: 'Nifty 500', data: d.benchmark_curve, borderColor: '#94a3b8',
-          backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, borderDash: [4,3], tension: 0.1 },
-      ],
-    },
-    options: {
-      responsive: true,
-      interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
-        titleColor: chartColors().t1, bodyColor: chartColors().t2,
-        callbacks: { label: c => ` ${c.dataset.label}: ${c.raw.toFixed(2)}x` },
-      }},
-      scales: {
-        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 12 } },
-        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, callback: v => v.toFixed(1)+'x' } },
+  try {
+    const ctx = document.getElementById('minGrowthChart').getContext('2d');
+    if (_minChart) _minChart.destroy();
+    _minChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: d.dates,
+        datasets: [
+          { label: 'Trend Breakout', data: d.strategy_curve, borderColor: '#6366f1',
+            backgroundColor: 'rgba(99,102,241,.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1 },
+          { label: _benchLabel(d), data: d.benchmark_curve, borderColor: '#94a3b8',
+            backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, borderDash: [4,3], tension: 0.1 },
+        ],
       },
-    },
-  });
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false }, tooltip: {
+          backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
+          titleColor: chartColors().t1, bodyColor: chartColors().t2,
+          callbacks: { label: c => ` ${c.dataset.label}: ${c.raw == null ? '—' : c.raw.toFixed(2)+'x'}` },
+        }},
+        scales: {
+          x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 12 } },
+          y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, callback: v => v.toFixed(1)+'x' } },
+        },
+      },
+    });
+  } catch(e) { console.error('growth chart', e); }
 
-  renderHeatmap(d.monthly_returns, d.monthly_bench, 'minHeatmapWrap');
-  renderMinHistory(d);
-  drawSparkline('spark-min', d.strategy_curve);
+  try { renderHeatmap(d.monthly_returns, d.monthly_bench, 'minHeatmapWrap'); } catch(e) { console.error('heatmap', e); }
+  try { renderMinHistory(d); } catch(e) { console.error('history', e); }
+  try { drawSparkline('spark-min', d.strategy_curve); } catch(e) { console.error('sparkline', e); }
 
   // Populate screener data
   _screenData = d.current_screen || [];
-  if (_activeMinTab === 'screener') renderScreen();
+  try { if (_activeMinTab === 'screener') renderScreen(); } catch(e) { console.error('screen', e); }
 }
 
 function renderMinHistory(d) {
@@ -2409,7 +2482,7 @@ async function loadMinerviniScreen() {
     return;
   }
   try {
-    const res = await fetch(API + '/api/minervini/backtest/result');
+    const res = await fetch(API + '/api/minervini/backtest/result?market=' + _mvMarket());
     if (res.ok) { renderMinervini(await res.json()); }
     else { show('screenEmpty'); }
   } catch(_) { show('screenEmpty'); }
@@ -2453,178 +2526,6 @@ function renderScreen() {
       <td><span class="${passClass}">${r.passing}/9</span></td>
     </tr>`;
   }).join('');
-}
-
-// ── Monthly Report ────────────────────────────────────────────────────────────
-
-let _reportPollTimer = null;
-window._reportRefreshing = false;
-
-async function _startReportPoll() {
-  clearTimeout(_reportPollTimer);
-  try {
-    const st = await fetch(API + '/api/report/status').then(r => r.json());
-    const running = st.minervini_running;
-    const wasRefreshing = window._reportRefreshing;
-    window._reportRefreshing = running;
-
-    if (running) {
-      renderReport(); // show spinner
-      _reportPollTimer = setTimeout(_startReportPoll, 15000);
-    } else if (wasRefreshing) {
-      // Just finished — reload fresh data then re-render
-      window._reportRefreshing = false;
-      try {
-        const r2 = await fetch(API + '/api/minervini/backtest/result');
-        if (r2.ok) renderMinervini(await r2.json());
-      } catch(_) {}
-      renderReport();
-    }
-  } catch(_) {}
-}
-
-function renderReport() {
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const today  = new Date();
-  const yr     = today.getFullYear();
-
-  // Current calendar month — used as the shared period label for all strategies
-  const curMonthIdx  = today.getMonth();
-  const curMonthName = MONTHS[curMonthIdx];
-  const curMonthLabel = curMonthName + ' ' + yr;
-
-  // Get the value for a specific month+year from a monthly_returns array
-  function monthVal(rows, monthName, year) {
-    if (!rows) return null;
-    const row = rows.find(r => r.year === year);
-    if (!row) return null;
-    return row[monthName] !== undefined ? row[monthName] : null;
-  }
-
-  // YTD from the Annual field of the current year row
-  function ytdVal(rows, year) {
-    if (!rows) return null;
-    const row = rows.find(r => r.year === year);
-    return row ? (row.Annual ?? null) : null;
-  }
-
-  function pctStr(v) {
-    if (v == null) return '—';
-    return (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
-  }
-  function clr(v) {
-    if (v == null) return 'var(--t3)';
-    return v >= 0 ? 'var(--green)' : 'var(--red)';
-  }
-
-  const strategies = [
-    { label: 'Trend Breakout',        color: '#f59e0b',       data: window._minData },
-  ];
-
-  const available = strategies.filter(s => s.data);
-  if (!available.length) { show('reportEmpty'); hide('reportCards'); hide('reportFooter'); return; }
-
-  hide('reportEmpty'); show('reportCards'); show('reportFooter');
-
-  document.getElementById('reportTitle').textContent =
-    today.toLocaleString('default', { month: 'long', year: 'numeric' }) + ' — Performance Report';
-
-  // Stale data warning: any strategy missing current-month data
-  const staleStrategies = available.filter(s => {
-    const v = monthVal(s.data.monthly_returns, curMonthName, yr);
-    return v == null;
-  });
-
-  const refreshing = window._reportRefreshing;
-  const warningHtml = staleStrategies.length ? `
-    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;margin-bottom:16px;
-      background:var(--bg-alt);border:1px solid var(--border);border-radius:10px;
-      border-left:3px solid ${refreshing ? 'var(--accent)' : '#f59e0b'}">
-      <span style="font-size:16px;flex-shrink:0">${refreshing ? '🔄' : '⚠️'}</span>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:3px">
-          ${refreshing ? 'Auto-refreshing…' : 'Stale backtest data'}
-        </div>
-        <div style="font-size:11px;color:var(--t2)">
-          <strong>${staleStrategies.map(s => s.label).join(', ')}</strong>
-          ${staleStrategies.length > 1 ? 'don\'t have' : 'doesn\'t have'} ${curMonthLabel} data yet.
-          ${refreshing
-            ? 'Running in background — report will update automatically when done.'
-            : 'Backtests auto-run on server startup; re-run manually if needed.'}
-        </div>
-      </div>
-    </div>` : '';
-
-  const cardsHtml = available.map(s => {
-    const kpi  = s.data.strategy_kpi  || {};
-    const bkpi = s.data.benchmark_kpi || {};
-    const runAt = (s.data.run_at || '').slice(0, 10);
-
-    // Always show current calendar month — null if backtest hasn't reached it
-    const cur  = monthVal(s.data.monthly_returns, curMonthName, yr);
-    const bcur = monthVal(s.data.monthly_bench,   curMonthName, yr);
-    const ytd  = ytdVal(s.data.monthly_returns, yr);
-    const bytd = ytdVal(s.data.monthly_bench,   yr);
-
-    const alphaCur  = (cur  != null && bcur  != null) ? +(cur  - bcur ).toFixed(1) : null;
-    const alphaYtd  = (ytd  != null && bytd  != null) ? +(ytd  - bytd ).toFixed(1) : null;
-    const alphaCagr = (kpi.cagr_pct != null && bkpi.cagr_pct != null)
-                      ? +(kpi.cagr_pct - bkpi.cagr_pct).toFixed(1) : null;
-
-    const staleNote = cur == null
-      ? `<span style="font-size:10px;color:#f59e0b;font-weight:600;margin-left:8px">⚠ backtest not updated</span>`
-      : '';
-
-    return `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
-      overflow:hidden;border-left:4px solid ${s.color}">
-      <div style="padding:18px 22px 14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;
-            color:${s.color}">${s.label}${staleNote}</div>
-          ${runAt ? `<div style="font-size:10px;color:var(--t3)">run ${runAt}</div>` : ''}
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;margin-bottom:16px">
-          ${[
-            [curMonthLabel,    cur,          bcur,          alphaCur],
-            ['YTD ' + yr,      ytd,          bytd,          alphaYtd],
-            ['CAGR (backtest)', kpi.cagr_pct, bkpi.cagr_pct, alphaCagr],
-          ].map(([name, val, bval, alpha], i) => `
-            ${i > 0 ? '<div style="background:var(--border);margin:0 12px"></div>' : ''}
-            <div style="padding:0 4px">
-              <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;
-                letter-spacing:.07em;margin-bottom:5px">${name}</div>
-              <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:3px;
-                color:${clr(val)}">${pctStr(val)}</div>
-              <div style="font-size:10px;color:var(--t3)">
-                Nifty 500 ${pctStr(bval)} &nbsp;·&nbsp;
-                <span style="color:${clr(alpha)}">α ${pctStr(alpha)}</span>
-              </div>
-            </div>`).join('')}
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);
-          padding-top:14px;gap:8px;text-align:center">
-          ${[
-            ['Sharpe',       kpi.sharpe?.toFixed(2)             ?? '—'],
-            ['Max Drawdown', kpi.max_dd_pct != null ? pctStr(kpi.max_dd_pct) : '—'],
-            ['Win Rate',     kpi.win_rate_pct != null ? kpi.win_rate_pct.toFixed(0) + '%' : '—'],
-            ['Months',       kpi.total_months ?? '—'],
-          ].map(([name, val]) => `
-            <div>
-              <div style="font-size:16px;font-weight:700;color:var(--t1);margin-bottom:2px">${val}</div>
-              <div style="font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;
-                letter-spacing:.06em">${name}</div>
-            </div>`).join('')}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-
-  document.getElementById('reportCards').innerHTML = warningHtml + cardsHtml;
-
-  const runDates = available.map(s => s.data.run_at).filter(Boolean).sort();
-  document.getElementById('reportFooterMeta').textContent =
-    'As of ' + (runDates[runDates.length - 1] || '').slice(0, 10) + ' · Backtest returns · Not investment advice';
 }
 
 // ── Dark mode ─────────────────────────────────────────────────────────────────
@@ -2693,7 +2594,7 @@ function round4(v) { return Math.round(v * 10000) / 10000; }
 
 async function init() {
   initDark();
-  const validTabs = ['home', 'portfolio', 'minervini', 'ha', 'report'];
+  const validTabs = ['home', 'portfolio', 'minervini', 'ha'];
   const hashTab = window.location.hash.slice(1);
   if (hashTab && validTabs.includes(hashTab)) goToTab(hashTab);
 
