@@ -218,6 +218,18 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle}
 .is-loading{opacity:.45;transition:opacity .15s}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* screener logos + trend badges */
+.logo-wrap{display:inline-flex;width:28px;height:28px;flex-shrink:0;margin-right:9px}
+.logo-img{width:28px;height:28px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid var(--border-inner)}
+.logo-mono{width:28px;height:28px;border-radius:6px;align-items:center;justify-content:center;
+  font-size:10px;font-weight:800;color:#fff;background:var(--accent)}
+.trend-badge{display:inline-block;padding:3px 12px;border-radius:6px;font-size:11px;font-weight:700}
+.trend-bull{background:var(--green-bg);color:var(--green);border:1px solid var(--green-br)}
+.trend-bear{background:var(--red-bg);color:var(--red);border:1px solid var(--red-br)}
+.trend-hold{background:var(--warn-bg);color:var(--warn-t);border:1px solid var(--warn-br)}
+.ma-cell{font-variant-numeric:tabular-nums;white-space:nowrap}
+.var-pos{background:var(--green-bg);color:var(--green);font-weight:600}
+.var-neg{background:var(--red-bg);color:var(--red);font-weight:600}
 .status-text{font-size:13px;color:var(--t2)}
 .progress-bar-wrap{flex:1;background:var(--border);border-radius:3px;height:4px;overflow:hidden}
 .progress-bar-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .4s}
@@ -864,13 +876,14 @@ html{scroll-behavior:smooth}
     <div class="tbl-wrap" style="max-height:calc(100vh - 150px)">
       <table id="screenTable">
         <thead><tr>
-          <th style="text-align:left"># Symbol</th>
+          <th style="text-align:left">Company</th>
+          <th id="screenPriceHdr">Price</th>
+          <th class="tt" data-tip="Bullish: price above 50 &amp; 200 · Bearish: below both · Hold: mixed">Total Trend</th>
+          <th>9 Day EMA</th><th>% Var</th>
+          <th>21 Day EMA</th><th>% Var</th>
+          <th>50 Day SMA</th><th>% Var</th>
+          <th>200 Day SMA</th><th>% Var</th>
           <th class="tt" data-tip="RS Rating: percentile rank of 12-month return (0–99)">RS</th>
-          <th id="screenPriceHdr">Price ₹</th>
-          <th class="tt" data-tip="% below 52-week high (closer to 0 = near breakout)">52w High %</th>
-          <th class="tt" data-tip="% above 52-week low (≥30% required for SEPA c9)">52w Low %</th>
-          <th class="tt" data-tip="P>150 · P>200 · 150>200 · 200↑ · 50>150 · 50>200 · P>50 · &lt;25%H · >30%L · RS≥70">SEPA Criteria</th>
-          <th>Pass</th>
         </tr></thead>
         <tbody id="screenBody"></tbody>
       </table>
@@ -2531,29 +2544,42 @@ function renderScreen() {
   show('screenResults');
   const ccy = _scrMarket === 'us' ? '$' : '₹';
 
-  const cKeys = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10'];
-  const cShort = {c1:'P>150',c2:'P>200',c3:'150>200',c4:'200↑',c5:'50>150',c6:'50>200',c7:'P>50',c8:'<25%H',c9:'>30%L',c10:'RS≥70'};
+  const fmtP = v => v == null ? '—' : ccy + v.toLocaleString('en-IN', {maximumFractionDigits:2});
+  const logoUrl = sym => _scrMarket === 'us'
+    ? `https://logos.stockanalysis.com/${sym.toLowerCase()}.svg`
+    : `https://assets.parqet.com/logos/symbol/${encodeURIComponent(sym)}.NS`;
 
-  document.getElementById('screenBody').innerHTML = rows.map((r, i) => {
-    const dots = cKeys.map(k => {
-      const ok = r.criteria?.[k];
-      return `<span title="${cShort[k]}" style="display:inline-block;width:8px;height:8px;border-radius:50%;
-        background:${ok ? 'var(--green)' : 'var(--red)'};margin:0 1px;cursor:help"></span>`;
-    }).join('');
-    const passClass = r.sepa_pass ? 'chip chip-add' : r.passing >= 7 ? 'chip chip-hold' : 'chip chip-rem';
-    // pct_from_52h: positive = % below 52w high (lower is better — near breakout)
-    const from52h  = r.pct_from_52h  != null
-      ? `<span class="${r.pct_from_52h <= 10 ? 'g' : r.pct_from_52h <= 20 ? '' : 'r'}">-${r.pct_from_52h.toFixed(1)}%</span>` : '—';
-    const above52l = r.pct_above_52l != null
-      ? `<span class="${r.pct_above_52l >= 30 ? 'g' : 'r'}">${r.pct_above_52l.toFixed(1)}%</span>` : '—';
+  // MA value cell + its % variance cell (green above MA, red below — like the image)
+  const maCell = (price, ma) => {
+    if (ma == null || !price) return `<td class="ma-cell d">—</td><td class="d">—</td>`;
+    const v = (price / ma - 1) * 100;
+    const txt = v >= 0 ? `${v.toFixed(1)}%` : `(${Math.abs(v).toFixed(1)}%)`;
+    return `<td class="ma-cell">${fmtP(ma)}</td><td class="${v >= 0 ? 'var-pos' : 'var-neg'}">${txt}</td>`;
+  };
+
+  document.getElementById('screenBody').innerHTML = rows.map((r) => {
+    const above50  = r.sma50  != null && r.price > r.sma50;
+    const above200 = r.sma200 != null && r.price > r.sma200;
+    let trend = 'Hold', tcls = 'trend-hold';
+    if (above50 && above200)        { trend = 'Bullish'; tcls = 'trend-bull'; }
+    else if (!above50 && !above200) { trend = 'Bearish'; tcls = 'trend-bear'; }
+
+    const logo = `<span class="logo-wrap">
+      <img class="logo-img" src="${logoUrl(r.symbol)}" alt="" loading="lazy"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
+      <span class="logo-mono" style="display:none">${(r.symbol||'?').slice(0,2)}</span></span>`;
+
     return `<tr>
-      <td><span class="rank-badge">${i+1}</span><span style="font-weight:600">${r.symbol}</span>${r.name ? `<div style="font-size:10px;color:var(--t3);margin-left:24px">${r.name}</div>` : ''}</td>
+      <td><div style="display:flex;align-items:center">${logo}
+        <div><div style="font-weight:700">${r.symbol}</div>
+        <div style="font-size:10px;color:var(--t3)">${r.name || ''}</div></div></div></td>
+      <td class="ma-cell" style="font-weight:700">${fmtP(r.price)}</td>
+      <td><span class="trend-badge ${tcls}">${trend}</span></td>
+      ${maCell(r.price, r.ema9)}
+      ${maCell(r.price, r.ema21)}
+      ${maCell(r.price, r.sma50)}
+      ${maCell(r.price, r.sma200)}
       <td><span class="${r.rs_rating >= 80 ? 'g' : r.rs_rating >= 60 ? '' : 'r'}" style="font-weight:700">${r.rs_rating != null ? r.rs_rating.toFixed(0) : '—'}</span></td>
-      <td>${ccy}${r.price?.toLocaleString('en-IN') ?? '—'}</td>
-      <td>${from52h}</td>
-      <td>${above52l}</td>
-      <td style="white-space:nowrap">${dots}</td>
-      <td><span class="${passClass}">${r.passing}/10</span></td>
     </tr>`;
   }).join('');
 }

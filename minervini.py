@@ -57,6 +57,8 @@ def compute_sepa(close: pd.DataFrame,
     stocks = [c for c in close.columns if c != benchmark]
     sc = close[stocks]
 
+    ema9   = sc.ewm(span=9,  adjust=False).mean()
+    ema21  = sc.ewm(span=21, adjust=False).mean()
     sma50  = sc.rolling(50,  min_periods=50).mean()
     sma150 = sc.rolling(150, min_periods=150).mean()
     sma200 = sc.rolling(200, min_periods=200).mean()
@@ -93,6 +95,7 @@ def compute_sepa(close: pd.DataFrame,
     sepa_pass = c1 & c2 & c3 & c4 & c5 & c6 & c7 & c8 & c9 & c10
 
     return {
+        "ema9": ema9, "ema21": ema21,
         "sma50": sma50, "sma150": sma150, "sma200": sma200,
         "high52w": high52w, "low52w": low52w,
         "rs_rating": rs_rating,
@@ -396,6 +399,8 @@ def screen_on_date(sepa: dict, close: pd.DataFrame, ref_date: pd.Timestamp,
         # high52w/low52w come from compute_sepa — already uses intraday H/L when available
         h52   = _get("high52w")
         l52   = _get("low52w")
+        e9    = _get("ema9")
+        e21   = _get("ema21")
         s50   = _get("sma50")
         s150  = _get("sma150")
         s200  = _get("sma200")
@@ -413,6 +418,8 @@ def screen_on_date(sepa: dict, close: pd.DataFrame, ref_date: pd.Timestamp,
             "symbol":        t.replace(".NS", ""),
             "price":         round(float(price), 2),
             "rs_rating":     round(float(rs), 1) if rs is not None else None,
+            "ema9":          round(float(e9), 2) if e9 is not None else None,
+            "ema21":         round(float(e21), 2) if e21 is not None else None,
             "sma50":         round(float(s50), 2) if s50 is not None else None,
             "sma150":        round(float(s150), 2) if s150 is not None else None,
             "sma200":        round(float(s200), 2) if s200 is not None else None,
