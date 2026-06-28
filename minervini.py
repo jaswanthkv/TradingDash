@@ -37,11 +37,14 @@ CRITERIA_LABELS = {
     "c7": "Price > 50d SMA",
     "c8": "Within 25% of 52w High",
     "c9": "30%+ above 52w Low",
+    "c10": "RS Rating ≥ 70",
 }
 CRITERIA_SHORT = {
     "c1": "P>150", "c2": "P>200", "c3": "150>200", "c4": "200↑",
     "c5": "50>150", "c6": "50>200", "c7": "P>50", "c8": "<25%H", "c9": ">30%L",
+    "c10": "RS≥70",
 }
+RS_MIN = 70   # Minervini Trend Template: RS Rating must be ≥ 70
 
 
 # ── SEPA signal computation ───────────────────────────────────────────────────
@@ -85,8 +88,9 @@ def compute_sepa(close: pd.DataFrame,
     c7 = sc > sma50
     c8 = sc >= high52w * 0.75
     c9 = sc >= low52w  * 1.30
+    c10 = rs_rating >= RS_MIN          # relative-strength leadership gate
 
-    sepa_pass = c1 & c2 & c3 & c4 & c5 & c6 & c7 & c8 & c9
+    sepa_pass = c1 & c2 & c3 & c4 & c5 & c6 & c7 & c8 & c9 & c10
 
     return {
         "sma50": sma50, "sma150": sma150, "sma200": sma200,
@@ -94,7 +98,7 @@ def compute_sepa(close: pd.DataFrame,
         "rs_rating": rs_rating,
         "sepa_pass": sepa_pass,
         "c1": c1, "c2": c2, "c3": c3, "c4": c4, "c5": c5,
-        "c6": c6, "c7": c7, "c8": c8, "c9": c9,
+        "c6": c6, "c7": c7, "c8": c8, "c9": c9, "c10": c10,
     }
 
 
@@ -418,7 +422,7 @@ def screen_on_date(sepa: dict, close: pd.DataFrame, ref_date: pd.Timestamp,
             "pct_above_52l": pct_l,
             "criteria":      criteria,
             "passing":       n_pass,
-            "sepa_pass":     n_pass == 9,
+            "sepa_pass":     n_pass == len(CRITERIA_LABELS),
         })
 
     rows.sort(key=lambda r: (-r["passing"], -(r["rs_rating"] or 0)))

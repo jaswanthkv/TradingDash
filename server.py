@@ -282,6 +282,57 @@ def minervini_backtest_status(market: str = "india"):
             "progress": _min_progress[market], "market": market}
 
 
+# ── Live SEPA screener ─────────────────────────────────────────────────────────
+
+_screener_running = {m: False for m in _min_markets}
+
+
+@app.get("/api/screener")
+async def screener(market: str = "india", fresh: bool = False):
+    """Near-real-time SEPA screen for a market, computed on the latest available
+    daily closes (not the stored backtest snapshot). Uses the same-day price
+    cache for speed; fresh=true forces a live re-pull for the newest prices."""
+    market = _norm_market(market)
+    if _screener_running[market]:
+        raise HTTPException(409, "Screener already refreshing for this market")
+    import minervini as mv
+    import strategy as st
+
+    benchmark = st.BENCHMARKS.get(market, st.BENCHMARK)
+    _, bench_label = _benchmark_for(market)
+
+    def _run():
+        _screener_running[market] = True
+        try:
+            tickers = st.load_universe(market)
+            # 5y window matches the backtest's cache key, so the screener reuses
+            # the same-day price cache (instant) instead of re-downloading.
+            close, _, high, low = st.download_data(
+                tickers, years=5, include_hl=True, benchmark=benchmark,
+                use_cache=not fresh)
+            sepa   = mv.compute_sepa(close, high, low, benchmark=benchmark)
+            stocks = [c for c in close.columns if c != benchmark]
+            rows   = mv.screen_on_date(sepa, close, pd.Timestamp(date.today()), stocks)
+            names  = st.load_universe_names(market)
+            for r in rows:
+                r["name"] = names.get(r["symbol"], "")
+            as_of  = str(close.index[-1].date()) if len(close.index) else ""
+            return rows, as_of
+        finally:
+            _screener_running[market] = False
+
+    loop = asyncio.get_event_loop()
+    rows, as_of = await loop.run_in_executor(_executor, _run)
+    return {
+        "market":          market,
+        "benchmark_label": bench_label,
+        "as_of":           as_of,
+        "rows":            rows,
+        "full_pass":       sum(1 for r in rows if r.get("sepa_pass")),
+        "universe":        len(rows),
+    }
+
+
 # ── Kite auth ────────────────────────────────────────────────────────────────
 
 @app.get("/api/kite/status")

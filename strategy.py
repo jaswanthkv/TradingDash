@@ -103,6 +103,34 @@ def _read_csv(path: str) -> list[str]:
     return tickers
 
 
+def load_universe_names(market: str = "india") -> dict:
+    """Map of symbol → company name from the market's universe CSV(s).
+    US uses the cached S&P 500 list (Security col); India the NSE CSVs
+    (Company Name col). Returns {} if names aren't available."""
+    if market == "us":
+        paths = [_SP500_CACHE]
+    else:
+        paths = [p for p in (UNIVERSE_CSV, UNIVERSE_CSV_2) if p]
+    names: dict[str, str] = {}
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                cols = {(c or "").strip().lower(): c for c in (reader.fieldnames or [])}
+                sym_col  = cols.get("symbol")
+                name_col = cols.get("security") or cols.get("company name") or cols.get("name")
+                if not sym_col or not name_col:
+                    continue
+                for row in reader:
+                    sym = (row.get(sym_col) or "").strip().replace(".", "-")
+                    nm  = (row.get(name_col) or "").strip()
+                    if sym and nm:
+                        names.setdefault(sym, nm)
+        except Exception:
+            pass
+    return names
+
+
 def load_universe(market: str = "india") -> list[str]:
     """Tickers for the requested market. US → S&P 500, India → NSE universe CSVs."""
     if market == "us":
@@ -198,7 +226,7 @@ def _save_price_cache(key: str, close, volume, high, low):
 
 def download_data(tickers: list[str], years: int = 5,
                   include_hl: bool = False, benchmark: str | None = None,
-                  progress_cb=None):
+                  progress_cb=None, use_cache: bool = True):
     """
     Download daily OHLCV for all tickers + benchmark.
     Returns (close, volume) by default; (close, volume, high, low) when include_hl=True.
@@ -210,8 +238,9 @@ def download_data(tickers: list[str], years: int = 5,
         if progress_cb: progress_cb(done, total, msg)
 
     # Same-day price cache → deterministic, instant re-runs, no re-download.
+    # use_cache=False forces a fresh pull (near-real-time screener refresh).
     cache_key = _price_cache_key(tickers, benchmark, years)
-    cached = _load_price_cache(cache_key)
+    cached = _load_price_cache(cache_key) if use_cache else None
     if cached is not None:
         _dlp(1, 1, "Loaded prices from today's cache")
         close, volume, high, low = cached

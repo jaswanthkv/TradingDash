@@ -214,6 +214,9 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
   padding:16px 20px;display:flex;align-items:center;gap:12px;margin-bottom:16px}
 .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);
   border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+.spin-inline{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle}
+.is-loading{opacity:.45;transition:opacity .15s}
 @keyframes spin{to{transform:rotate(360deg)}}
 .status-text{font-size:13px;color:var(--t2)}
 .progress-bar-wrap{flex:1;background:var(--border);border-radius:3px;height:4px;overflow:hidden}
@@ -413,7 +416,8 @@ html{scroll-behavior:smooth}
   <nav class="side-nav">
     <button class="tab active" onclick="switchTab('home',this)"><span class="ti">🏠</span><span class="tl">Home</span></button>
     <button class="tab" id="tabPortfolio" onclick="switchTab('portfolio',this)"><span class="ti">💼</span><span class="tl">Portfolio</span></button>
-    <button class="tab" onclick="switchTab('minervini',this)"><span class="ti">📈</span><span class="tl">Trend Breakout</span></button>
+    <button class="tab" onclick="switchTab('minervini',this)"><span class="ti">📈</span><span class="tl">Backtest</span></button>
+    <button class="tab" onclick="switchTab('screener',this)"><span class="ti">🔍</span><span class="tl">Screener</span></button>
     <button class="tab" onclick="switchTab('ha',this)"><span class="ti">⚡</span><span class="tl">Pulse</span></button>
   </nav>
   <div class="side-foot">
@@ -684,11 +688,6 @@ html{scroll-behavior:smooth}
 <!-- ════════════════════ MINERVINI TAB ════════════════════ -->
 <div class="tab-pane" id="tab-minervini">
 
-  <div class="sub-tab-bar">
-    <button class="sub-tab active" onclick="switchMinTab('backtest',this)">Backtest</button>
-    <button class="sub-tab" onclick="switchMinTab('screener',this)">Screener</button>
-  </div>
-
   <!-- ── Minervini: Backtest ── -->
   <div class="min-pane active" id="min-backtest">
     <div class="param-row">
@@ -825,43 +824,58 @@ html{scroll-behavior:smooth}
     </div>
   </div>
 
-  <!-- ── Minervini: Screener ── -->
-  <div class="min-pane" id="min-screener">
-    <div class="param-row" style="gap:12px">
-      <span style="font-size:12px;font-weight:600;color:var(--t2)">Filter:</span>
-      <button class="btn btn-primary btn-sm" id="flt-all"    onclick="filterScreen('all')">All</button>
-      <button class="btn btn-ghost btn-sm"   id="flt-full"   onclick="filterScreen('full')">Full Pass (9/9)</button>
-      <button class="btn btn-ghost btn-sm"   id="flt-near"   onclick="filterScreen('near')">Near Setup (7–8/9)</button>
-      <span id="screenCount" style="font-size:11px;color:var(--t3);margin-left:8px"></span>
-      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadMinerviniScreen()">↺ Refresh</button>
-    </div>
+</div>
 
-    <div id="screenEmpty" class="page">
-      <div class="empty">
-        <div class="empty-icon">🔍</div>
-        <div class="empty-title">Run backtest first</div>
-        <div class="empty-sub">The screener uses data loaded during backtest.</div>
-      </div>
+<!-- ════════════════════ SCREENER TAB ════════════════════ -->
+<div class="tab-pane" id="tab-screener">
+  <div class="param-row" style="gap:12px;flex-wrap:wrap">
+    <div class="param-group">
+      <label>Market</label>
+      <select id="scr-market" onchange="onScrMarketChange()">
+        <option value="india" selected>🇮🇳 India · Nifty</option>
+        <option value="us">🇺🇸 US · S&amp;P 500</option>
+      </select>
     </div>
+    <div class="param-sep">·</div>
+    <span id="screenCount" style="font-size:11px;color:var(--t3)"></span>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:10px">
+      <span id="screenAsOf" class="d" style="font-size:11px"></span>
+      <button class="btn btn-ghost btn-sm" onclick="loadScreener(true)" title="Force a live re-pull of the latest prices">↻ Refresh (live)</button>
+    </span>
+  </div>
 
-    <div id="screenResults" class="hidden">
-      <div class="tbl-wrap" style="max-height:calc(100vh - 180px)">
-        <table id="screenTable">
-          <thead><tr>
-            <th style="text-align:left"># Symbol</th>
-            <th class="tt" data-tip="RS Rating: percentile rank of 12-month return (0–99)">RS</th>
-            <th>Price ₹</th>
-            <th class="tt" data-tip="% below 52-week high (closer to 0 = near breakout)">52w High %</th>
-            <th class="tt" data-tip="% above 52-week low (≥30% required for SEPA c9)">52w Low %</th>
-            <th class="tt" data-tip="P>150 · P>200 · 150>200 · 200↑ · 50>150 · 50>200 · P>50 · &lt;25%H · >30%L">SEPA Criteria</th>
-            <th>Pass</th>
-          </tr></thead>
-          <tbody id="screenBody"></tbody>
-        </table>
-      </div>
+  <div id="screenEmpty" class="page hidden">
+    <div class="empty">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-title">No screener data</div>
+      <div class="empty-sub">Pick a market — the screen computes on the latest closes.</div>
     </div>
   </div>
 
+  <div id="screenLoading" class="page hidden">
+    <div class="empty">
+      <div class="spinner" style="margin:0 auto 12px"></div>
+      <div class="empty-title">Screening…</div>
+      <div class="empty-sub">First load of the day downloads prices (~1 min); after that it's instant.</div>
+    </div>
+  </div>
+
+  <div id="screenResults" class="hidden">
+    <div class="tbl-wrap" style="max-height:calc(100vh - 150px)">
+      <table id="screenTable">
+        <thead><tr>
+          <th style="text-align:left"># Symbol</th>
+          <th class="tt" data-tip="RS Rating: percentile rank of 12-month return (0–99)">RS</th>
+          <th id="screenPriceHdr">Price ₹</th>
+          <th class="tt" data-tip="% below 52-week high (closer to 0 = near breakout)">52w High %</th>
+          <th class="tt" data-tip="% above 52-week low (≥30% required for SEPA c9)">52w Low %</th>
+          <th class="tt" data-tip="P>150 · P>200 · 150>200 · 200↑ · 50>150 · 50>200 · P>50 · &lt;25%H · >30%L · RS≥70">SEPA Criteria</th>
+          <th>Pass</th>
+        </tr></thead>
+        <tbody id="screenBody"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 
@@ -1124,11 +1138,16 @@ function switchTab(name, el) {
   _activeTab = name;
   history.replaceState(null, '', '#' + name);
 
-  // KPI bar: hide on home and portfolio (portfolio has its own KPI section)
-  document.getElementById('kpiBar').style.display = (name === 'home' || name === 'portfolio') ? 'none' : '';
+  // KPI bar: hide on home, portfolio, screener (they have no backtest KPI bar)
+  document.getElementById('kpiBar').style.display =
+    (name === 'home' || name === 'portfolio' || name === 'screener') ? 'none' : '';
 
   if (name === 'portfolio') {
     loadPortfolio();
+    clearTimeout(_pulseRefreshTimer);
+    clearInterval(_pulseCountdownTimer);
+  } else if (name === 'screener') {
+    loadScreener();
     clearTimeout(_pulseRefreshTimer);
     clearInterval(_pulseCountdownTimer);
   } else if (name === 'ha') {
@@ -1268,11 +1287,18 @@ async function loadPortfolio(force = false) {
 }
 
 async function loadDayChange() {
+  // Clear stale (old-market) numbers immediately and show spinners.
+  const SP = '<span class="spin-inline"></span>';
+  ['dayN500','dayMin','mtdN500','mtdMin'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = SP; });
+  ['dayMinDiff','mtdMinDiff'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ''; });
+  setText('dayAsOf',''); setText('mtdAsOf','');
   try {
     const d = await fetch(API + '/api/portfolio/daily-change?market=' + _pfMarket).then(r => r.json());
     _dayData = d;
     renderDayChange(d);
-  } catch(_) {}
+  } catch(_) {
+    ['dayN500','dayMin','mtdN500','mtdMin'].forEach(id => setText(id, '—'));
+  }
 }
 
 // ── Portfolio vs Index growth chart ──────────────────────────────────────────
@@ -1284,10 +1310,19 @@ async function loadVsIndex(range = _vsRange) {
   document.querySelectorAll('.vs-range').forEach(b =>
     b.classList.toggle('active', b.dataset.r === String(range)));
   const qs = (range === 'mtd' ? 'from_month_start=true' : 'months=' + range) + '&market=' + _pfMarket;
+  // Loading state: dim the old chart and show a spinner in the meta line.
+  const wrap = document.getElementById('vsIndexChartWrap');
+  hide('vsIndexEmpty'); show('vsIndexChartWrap');
+  if (wrap) wrap.classList.add('is-loading');
+  document.getElementById('vsIndexMeta').innerHTML = '<span class="spin-inline"></span> Loading…';
   try {
     const d = await fetch(API + '/api/portfolio/vs-index?' + qs).then(r => r.json());
+    if (wrap) wrap.classList.remove('is-loading');
     renderVsIndex(d);
-  } catch(_) {}
+  } catch(_) {
+    if (wrap) wrap.classList.remove('is-loading');
+    setText('vsIndexMeta', '');
+  }
 }
 
 function renderVsIndex(d) {
@@ -2258,17 +2293,6 @@ async function retryFailedOrders(strategy) {
 let _minChart = null;
 let _minData  = null;
 let _screenData = [];
-let _screenFilter = 'all';
-let _activeMinTab = 'backtest';
-
-function switchMinTab(name, el) {
-  document.querySelectorAll('#tab-minervini .sub-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.min-pane').forEach(p => p.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('min-' + name).classList.add('active');
-  _activeMinTab = name;
-  if (name === 'screener') renderScreen();
-}
 
 function _mvMarket() {
   return document.getElementById('mv-market')?.value || 'india';
@@ -2279,8 +2303,6 @@ async function onMarketChange() {
   const market = _mvMarket();
   hide('minResults'); show('minEmpty');
   _minData = null; window._minData = null;
-  _screenData = [];
-  if (_activeMinTab === 'screener') renderScreen();
   try {
     const res = await fetch(API + '/api/minervini/backtest/result?market=' + market);
     if (res.ok) {
@@ -2401,10 +2423,6 @@ function renderMinervini(d) {
   try { renderHeatmap(d.monthly_returns, d.monthly_bench, 'minHeatmapWrap'); } catch(e) { console.error('heatmap', e); }
   try { renderMinHistory(d); } catch(e) { console.error('history', e); }
   try { drawSparkline('spark-min', d.strategy_curve); } catch(e) { console.error('sparkline', e); }
-
-  // Populate screener data
-  _screenData = d.current_screen || [];
-  try { if (_activeMinTab === 'screener') renderScreen(); } catch(e) { console.error('screen', e); }
 }
 
 function renderMinHistory(d) {
@@ -2466,43 +2484,55 @@ function showMinDetail(i) {
 }
 
 // ── Screener ──────────────────────────────────────────────────────────────────
-function filterScreen(f) {
-  _screenFilter = f;
-  ['all','full','near'].forEach(k => {
-    document.getElementById('flt-'+k).className =
-      'btn btn-sm ' + (k === f ? 'btn-primary' : 'btn-ghost');
-  });
-  renderScreen();
-}
+let _scrMarket = 'india';
+let _scrLoaded = null;       // market currently loaded into _screenData
+let _scrLoading = false;
+function _scrMkt() { return document.getElementById('scr-market')?.value || 'india'; }
 
-async function loadMinerviniScreen() {
-  if (_minData?.current_screen) {
-    _screenData = _minData.current_screen;
-    renderScreen();
-    return;
-  }
+function onScrMarketChange() { loadScreener(); }
+
+// Near-real-time SEPA screen for the selected market. fresh=true forces a live
+// re-pull of the latest prices (bypasses the same-day cache).
+async function loadScreener(fresh = false) {
+  _scrMarket = _scrMkt();
+  if (_scrLoading) return;
+  // Already have this market's data — just re-render (unless a live refresh).
+  if (!fresh && _scrLoaded === _scrMarket && _screenData.length) { renderScreen(); return; }
+  _scrLoading = true;
+  hide('screenEmpty'); hide('screenResults'); show('screenLoading');
+  setText('screenAsOf', '');
   try {
-    const res = await fetch(API + '/api/minervini/backtest/result?market=' + _mvMarket());
-    if (res.ok) { renderMinervini(await res.json()); }
-    else { show('screenEmpty'); }
-  } catch(_) { show('screenEmpty'); }
+    const d = await fetch(API + `/api/screener?market=${_scrMarket}&fresh=${fresh ? 'true' : 'false'}`)
+      .then(r => r.json());
+    hide('screenLoading');
+    _screenData = d.rows || [];
+    _scrLoaded = _screenData.length ? _scrMarket : null;
+    setText('screenPriceHdr', 'Price ' + (_scrMarket === 'us' ? '$' : '₹'));
+    setText('screenAsOf', d.as_of ? `as of ${d.as_of}${fresh ? ' · live' : ''}` : '');
+    renderScreen();
+  } catch(e) {
+    hide('screenLoading');
+    _screenData = [];
+    show('screenEmpty');
+    setText('screenAsOf', '');
+  } finally {
+    _scrLoading = false;
+  }
 }
 
 function renderScreen() {
-  if (!_screenData.length) { show('screenEmpty'); hide('screenResults'); return; }
+  if (!_screenData.length) { show('screenEmpty'); hide('screenResults'); hide('screenLoading'); return; }
 
-  let rows = _screenData;
-  if (_screenFilter === 'full') rows = rows.filter(r => r.sepa_pass);
-  else if (_screenFilter === 'near') rows = rows.filter(r => r.passing >= 7 && !r.sepa_pass);
-
+  const rows = _screenData;
   document.getElementById('screenCount').textContent =
-    `${rows.length} stocks · ${_screenData.filter(r=>r.sepa_pass).length} full SEPA`;
+    `${rows.length} stocks · ${_screenData.filter(r=>r.sepa_pass).length} full pass (10/10)`;
 
-  hide('screenEmpty');
+  hide('screenEmpty'); hide('screenLoading');
   show('screenResults');
+  const ccy = _scrMarket === 'us' ? '$' : '₹';
 
-  const cKeys = ['c1','c2','c3','c4','c5','c6','c7','c8','c9'];
-  const cShort = {c1:'P>150',c2:'P>200',c3:'150>200',c4:'200↑',c5:'50>150',c6:'50>200',c7:'P>50',c8:'<25%H',c9:'>30%L'};
+  const cKeys = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10'];
+  const cShort = {c1:'P>150',c2:'P>200',c3:'150>200',c4:'200↑',c5:'50>150',c6:'50>200',c7:'P>50',c8:'<25%H',c9:'>30%L',c10:'RS≥70'};
 
   document.getElementById('screenBody').innerHTML = rows.map((r, i) => {
     const dots = cKeys.map(k => {
@@ -2517,13 +2547,13 @@ function renderScreen() {
     const above52l = r.pct_above_52l != null
       ? `<span class="${r.pct_above_52l >= 30 ? 'g' : 'r'}">${r.pct_above_52l.toFixed(1)}%</span>` : '—';
     return `<tr>
-      <td><span class="rank-badge">${i+1}</span>${r.symbol}</td>
+      <td><span class="rank-badge">${i+1}</span><span style="font-weight:600">${r.symbol}</span>${r.name ? `<div style="font-size:10px;color:var(--t3);margin-left:24px">${r.name}</div>` : ''}</td>
       <td><span class="${r.rs_rating >= 80 ? 'g' : r.rs_rating >= 60 ? '' : 'r'}" style="font-weight:700">${r.rs_rating != null ? r.rs_rating.toFixed(0) : '—'}</span></td>
-      <td>₹${r.price?.toLocaleString('en-IN') ?? '—'}</td>
+      <td>${ccy}${r.price?.toLocaleString('en-IN') ?? '—'}</td>
       <td>${from52h}</td>
       <td>${above52l}</td>
       <td style="white-space:nowrap">${dots}</td>
-      <td><span class="${passClass}">${r.passing}/9</span></td>
+      <td><span class="${passClass}">${r.passing}/10</span></td>
     </tr>`;
   }).join('');
 }
@@ -2594,7 +2624,7 @@ function round4(v) { return Math.round(v * 10000) / 10000; }
 
 async function init() {
   initDark();
-  const validTabs = ['home', 'portfolio', 'minervini', 'ha'];
+  const validTabs = ['home', 'portfolio', 'minervini', 'ha', 'screener'];
   const hashTab = window.location.hash.slice(1);
   if (hashTab && validTabs.includes(hashTab)) goToTab(hashTab);
 
