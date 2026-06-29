@@ -431,6 +431,7 @@ html{scroll-behavior:smooth}
     <button class="tab" onclick="switchTab('minervini',this)"><span class="ti">📈</span><span class="tl">Backtest</span></button>
     <button class="tab" onclick="switchTab('screener',this)"><span class="ti">🔍</span><span class="tl">Screener</span></button>
     <button class="tab" onclick="switchTab('ha',this)"><span class="ti">⚡</span><span class="tl">Pulse</span></button>
+    <button class="tab" onclick="switchTab('options',this)"><span class="ti">🎯</span><span class="tl">Sell Options</span></button>
   </nav>
   <div class="side-foot">
     <span class="last-upd" id="navUpdated"></span>
@@ -891,6 +892,157 @@ html{scroll-behavior:smooth}
   </div>
 </div>
 
+<!-- ════════════════════ SELL OPTIONS TAB ════════════════════ -->
+<div class="tab-pane" id="tab-options">
+  <div class="param-row" style="gap:12px;flex-wrap:wrap">
+    <div class="param-group">
+      <label>Index</label>
+      <select id="opt-underlying" onchange="loadOptions()">
+        <option value="NIFTY" selected>Nifty 50</option>
+        <option value="BANKNIFTY">Bank Nifty</option>
+        <option value="FINNIFTY">Fin Nifty</option>
+      </select>
+    </div>
+    <div class="param-sep">·</div>
+    <div class="param-group">
+      <label>Safety</label>
+      <select id="opt-risk" onchange="loadOptions()">
+        <option value="conservative">Safer (further away)</option>
+        <option value="balanced" selected>Balanced</option>
+        <option value="aggressive">More premium (closer)</option>
+      </select>
+    </div>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:10px">
+      <span id="optAsOf" class="d" style="font-size:11px"></span>
+      <button class="btn btn-ghost btn-sm" onclick="loadOptions()">↻ Refresh</button>
+    </span>
+  </div>
+
+  <div class="page" style="max-width:760px;margin:0 auto">
+    <!-- Open positions + adjustments (only shows when you hold short options) -->
+    <div id="optPositions" style="margin-bottom:18px"></div>
+
+    <div id="optConnect" class="empty hidden" style="padding:40px">
+      <div class="empty-icon">🔌</div>
+      <div class="empty-title">Connect Kite to see live strikes</div>
+      <div class="empty-sub">Live option prices come from your Zerodha account.</div>
+      <button class="btn btn-primary" style="margin-top:14px" onclick="location.href='/api/kite/login'">Connect Kite</button>
+    </div>
+
+    <div id="optLoading" class="empty hidden" style="padding:40px">
+      <div class="spinner" style="margin:0 auto 12px"></div>
+      <div class="empty-title">Finding this week's strikes…</div>
+    </div>
+
+    <div id="optError" class="empty hidden" style="padding:40px">
+      <div class="empty-icon">⚠️</div>
+      <div class="empty-title">Couldn't load</div>
+      <div class="empty-sub" id="optErrorMsg"></div>
+    </div>
+
+    <div id="optContent" class="hidden">
+      <div style="text-align:center;margin:8px 0 14px">
+        <div style="font-size:13px;color:var(--t3)">This week, sell these two strikes 👇</div>
+        <div id="optHead" style="font-size:13px;color:var(--t2);margin-top:6px"></div>
+      </div>
+
+      <!-- Quant analysis strip -->
+      <div class="card" style="padding:14px 18px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+          <div style="font-size:12px;color:var(--t2)">
+            Market expects <b id="optImplied">—</b> this week ·
+            recent realized <b id="optRealized">—</b>
+          </div>
+          <span id="optSignal" class="trend-badge trend-hold">—</span>
+        </div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--t3)">
+          <span>Likely range (1σ, ~68%): <b id="optSd1" style="color:var(--t1)">—</b></span>
+          <span>Outer range (2σ, ~95%): <b id="optSd2" style="color:var(--t1)">—</b></span>
+          <span>Profit zone (breakevens): <b id="optZone" style="color:var(--green)">—</b></span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <!-- SELL CALL -->
+        <div class="card" style="text-align:center;padding:22px;border-top:3px solid var(--red)">
+          <div style="font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--red)">SELL CALL (CE)</div>
+          <div id="optCallStrike" style="font-size:34px;font-weight:800;color:var(--t1);margin:8px 0">—</div>
+          <div style="font-size:12px;color:var(--t3)" id="optCallDist"></div>
+          <div style="margin-top:14px;font-size:12px;color:var(--t3)">You collect</div>
+          <div id="optCallPrem" class="g" style="font-size:24px;font-weight:800">—</div>
+          <div style="margin-top:8px;font-size:11px;color:var(--t3)"><span id="optCallPop" style="font-weight:700;color:var(--green)"></span> · BE <span id="optCallBe"></span></div>
+        </div>
+        <!-- SELL PUT -->
+        <div class="card" style="text-align:center;padding:22px;border-top:3px solid var(--green)">
+          <div style="font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--green)">SELL PUT (PE)</div>
+          <div id="optPutStrike" style="font-size:34px;font-weight:800;color:var(--t1);margin:8px 0">—</div>
+          <div style="font-size:12px;color:var(--t3)" id="optPutDist"></div>
+          <div style="margin-top:14px;font-size:12px;color:var(--t3)">You collect</div>
+          <div id="optPutPrem" class="g" style="font-size:24px;font-weight:800">—</div>
+          <div style="margin-top:8px;font-size:11px;color:var(--t3)"><span id="optPutPop" style="font-weight:700;color:var(--green)"></span> · BE <span id="optPutBe"></span></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;padding:20px;text-align:center;background:var(--bg-alt)">
+        <div style="font-size:13px;color:var(--t2)" id="optPlain"></div>
+        <div style="font-size:26px;font-weight:800;color:var(--green);margin-top:6px" id="optKeep">—</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px" id="optKeepSub"></div>
+      </div>
+
+      <!-- Candidate ladders -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="card-head" style="padding:10px 14px"><span class="card-title" style="font-size:12px;color:var(--red)">Call strikes</span></div>
+          <table style="width:100%"><thead><tr><th style="text-align:left">Strike</th><th>Premium</th><th>POP</th><th>Dist</th></tr></thead><tbody id="optCallLadder"></tbody></table>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="card-head" style="padding:10px 14px"><span class="card-title" style="font-size:12px;color:var(--green)">Put strikes</span></div>
+          <table style="width:100%"><thead><tr><th style="text-align:left">Strike</th><th>Premium</th><th>POP</th><th>Dist</th></tr></thead><tbody id="optPutLadder"></tbody></table>
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--t3);margin-top:16px;line-height:1.7;text-align:center">
+        ⚠️ Selling options can lose much more than the premium if the index moves past your strikes.
+        POP = model probability the strike expires worthless (normal model on the implied move) — an estimate, not a guarantee.
+        Decision-support only, not advice. You place the trade yourself.
+      </div>
+    </div>
+
+    <!-- How did this do? 5-week backtest -->
+    <div class="card" style="margin-top:18px;padding:16px">
+      <div class="card-head" style="padding:0 0 6px">
+        <span class="card-title">📅 How did this do? — last 5 weeks</span>
+        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <select id="opt-weeks" onchange="loadOptBacktest()" style="font-size:12px;padding:3px 6px" title="Lookback">
+            <option value="8">8 weeks</option>
+            <option value="13">3 months</option>
+            <option value="26">6 months</option>
+            <option value="52" selected>1 year</option>
+            <option value="156">3 years</option>
+          </select>
+          <select id="opt-stop" onchange="loadOptBacktest()" style="font-size:12px;padding:3px 6px" title="Defense">
+            <option value="0">No stop</option>
+            <option value="2" selected>Stop 2× credit</option>
+            <option value="2.5">Stop 2.5×</option>
+            <option value="3">Stop 3×</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="loadOptBacktest()">Run</button>
+        </span>
+      </div>
+      <div id="optBtHint" style="font-size:11px;color:var(--t3)">
+        Sells the same strangle (current Index + Safety) each week. "Real NSE data" uses actual settlement premiums; "Defense" closes early if the loss hits N× the credit.
+      </div>
+      <div id="optBtLoading" class="hidden" style="padding:20px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
+      <div id="optBtResult" class="hidden">
+        <div id="optBtSummary" style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;margin:8px 0 12px"></div>
+        <div class="tbl-wrap"><table style="width:100%"><thead><tr>
+          <th style="text-align:left">Week</th><th>Spot move</th><th>Sold</th><th>Premium</th><th>Result</th><th>P&L</th>
+        </tr></thead><tbody id="optBtBody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <!-- ════════════════════ HA STRATEGY TAB ════════════════════ -->
 <div class="tab-pane" id="tab-ha">
@@ -1151,9 +1303,9 @@ function switchTab(name, el) {
   _activeTab = name;
   history.replaceState(null, '', '#' + name);
 
-  // KPI bar: hide on home, portfolio, screener (they have no backtest KPI bar)
+  // KPI bar: hide on tabs that have no backtest KPI bar
   document.getElementById('kpiBar').style.display =
-    (name === 'home' || name === 'portfolio' || name === 'screener') ? 'none' : '';
+    (name === 'home' || name === 'portfolio' || name === 'screener' || name === 'options') ? 'none' : '';
 
   if (name === 'portfolio') {
     loadPortfolio();
@@ -1161,6 +1313,10 @@ function switchTab(name, el) {
     clearInterval(_pulseCountdownTimer);
   } else if (name === 'screener') {
     loadScreener();
+    clearTimeout(_pulseRefreshTimer);
+    clearInterval(_pulseCountdownTimer);
+  } else if (name === 'options') {
+    loadOptions();
     clearTimeout(_pulseRefreshTimer);
     clearInterval(_pulseCountdownTimer);
   } else if (name === 'ha') {
@@ -2584,6 +2740,175 @@ function renderScreen() {
   }).join('');
 }
 
+// ── Sell Options (weekly strike suggester) ──────────────────────────────────────
+async function loadOptions() {
+  ['optConnect','optContent','optError'].forEach(hide);
+  show('optLoading');
+  setText('optAsOf', '');
+  const u = document.getElementById('opt-underlying')?.value || 'NIFTY';
+  const r = document.getElementById('opt-risk')?.value || 'balanced';
+  loadOptionPositions();   // refresh open-position health in parallel
+  try {
+    const d = await fetch(API + `/api/options/weekly?underlying=${u}&risk=${r}`).then(x => x.json());
+    hide('optLoading');
+    if (!d.connected) { show('optConnect'); return; }
+    if (d.error)      { show('optError'); setText('optErrorMsg', d.error); return; }
+    renderOptions(d);
+  } catch(e) {
+    hide('optLoading'); show('optError'); setText('optErrorMsg', e.message);
+  }
+}
+
+async function loadOptionPositions() {
+  const box = document.getElementById('optPositions');
+  try {
+    const d = await fetch(API + '/api/options/positions').then(x => x.json());
+    if (!d.connected || d.error || !d.positions || !d.positions.length) { box.innerHTML = ''; return; }
+    box.innerHTML = d.positions.map(renderPositionCard).join('');
+  } catch(_) { box.innerHTML = ''; }
+}
+
+function renderPositionCard(g) {
+  const inr = v => v == null ? '—' : '₹' + Number(v).toLocaleString('en-IN', {maximumFractionDigits:2});
+  const stCls = {safe:'trend-bull', watch:'trend-hold', tested:'trend-hold', breached:'trend-bear', unknown:'trend-hold'};
+  const stTxt = {safe:'Safe', watch:'Watch', tested:'Tested ⚠️', breached:'Breached 🔴', unknown:'—'};
+  const exp = new Date(g.expiry).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
+
+  const legRows = (g.legs||[]).map(l => {
+    const pnlCls = (l.pnl||0) >= 0 ? 'g' : 'r';
+    const sc = stCls[l.status] || 'trend-hold';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border-inner)">
+      <div><b>SELL ${l.strike} ${l.type}</b> <span class="d" style="font-size:11px">×${Math.abs(l.qty)}</span></div>
+      <div style="display:flex;gap:14px;align-items:center;font-size:12px">
+        ${l.pop_pct!=null?`<span>${l.pop_pct}% safe</span>`:''}
+        <span class="${pnlCls}">${inr(l.pnl)}</span>
+        <span class="trend-badge ${sc}" style="padding:1px 8px">${stTxt[l.status]||l.status}</span>
+      </div></div>`;
+  }).join('');
+
+  let adjHtml = '';
+  if (g.adjustment) {
+    const a = g.adjustment;
+    const acts = a.actions.map(act => {
+      const rec = act.kind === a.recommended;
+      const netCls = act.net_type === 'credit' ? 'g' : 'r';
+      const netTxt = `${act.net_type==='credit'?'+':''}${inr(act.net)} ${act.net_type}`;
+      return `<div class="card" style="padding:10px 12px;margin-top:8px;${rec?'border:1px solid var(--accent);background:var(--accent-subtle)':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <b style="font-size:13px">${rec?'✅ ':''}${act.title}</b>
+          <span class="${netCls}" style="font-weight:700;white-space:nowrap">${netTxt}</span>
+        </div>
+        <div style="font-size:11px;color:var(--t2);margin-top:3px">${act.detail}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">${act.why}</div>
+      </div>`;
+    }).join('');
+    adjHtml = `<div style="margin-top:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--warn-t)">⚠️ Your ${a.tested_side} is being tested — best ways to adjust:</div>
+      ${acts}
+    </div>`;
+  }
+
+  return `<div class="card" style="padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span class="card-title">${g.underlying} ${exp} · spot ${inr(g.spot)}</span>
+      <span class="trend-badge ${stCls[g.status]||'trend-hold'}">${stTxt[g.status]||g.status}</span>
+    </div>
+    ${legRows}
+    ${adjHtml}
+  </div>`;
+}
+
+async function loadOptBacktest() {
+  const u = document.getElementById('opt-underlying')?.value || 'NIFTY';
+  const r = document.getElementById('opt-risk')?.value || 'balanced';
+  const sx = document.getElementById('opt-stop')?.value || '0';
+  const wk = document.getElementById('opt-weeks')?.value || '52';
+  hide('optBtResult'); hide('optBtHint'); show('optBtLoading');
+  try {
+    const d = await fetch(API + `/api/options/backtest?underlying=${u}&risk=${r}&weeks=${wk}&stop_x=${sx}`).then(x => x.json());
+    hide('optBtLoading');
+    if (d.error || !d.rows || !d.rows.length) { show('optBtHint'); setText('optBtHint', d.error || 'No data'); return; }
+    const inr = v => (v >= 0 ? '+₹' : '−₹') + Math.abs(v).toLocaleString('en-IN');
+    document.getElementById('optBtSummary').innerHTML =
+      `<span class="trend-badge trend-bull" style="padding:1px 8px">Real NSE</span>
+       <span>Win rate: <b>${d.win_rate}%</b></span>
+       <span>Total: <b class="${d.total_pnl>=0?'g':'r'}">${inr(d.total_pnl)}</b></span>
+       <span>Avg/week: <b class="${d.avg_pnl>=0?'g':'r'}">${inr(d.avg_pnl)}</b></span>
+       <span>Worst: <b class="r">${inr(d.worst_pnl)}</b></span>
+       ${d.stops?`<span class="d">${d.stops} stop${d.stops>1?'s':''}</span>`:''}
+       <span class="d">(${d.weeks} wks · lot ${d.lot_size})</span>`;
+    document.getElementById('optBtBody').innerHTML = d.rows.map(w => {
+      const mv = (((w.spot_end/w.spot_start-1)*100)).toFixed(1);
+      const tag = w.stopped ? ['Stopped','trend-hold'] : w.win ? ['Win','trend-bull'] : ['Loss','trend-bear'];
+      return `<tr>
+        <td style="text-align:left">${w.entry_date.slice(5)}→${w.exit_date.slice(5)}</td>
+        <td class="${mv>=0?'g':'r'}">${mv>=0?'+':''}${mv}%</td>
+        <td class="d" style="font-size:11px">${w.put}P / ${w.call}C</td>
+        <td>${w.premium}</td>
+        <td><span class="trend-badge ${tag[1]}" style="padding:1px 8px">${tag[0]}${(!w.stopped&&!w.in_range)?' · breached':''}</span></td>
+        <td class="${w.pnl>=0?'g':'r'}" style="font-weight:700">${inr(w.pnl)}</td>
+      </tr>`;
+    }).join('');
+    show('optBtResult');
+  } catch(e) { hide('optBtLoading'); show('optBtHint'); setText('optBtHint', e.message); }
+}
+
+function renderOptions(d) {
+  show('optContent');
+  const inr = v => v == null ? '—' : '₹' + Number(v).toLocaleString('en-IN', {maximumFractionDigits:2});
+  const nm  = {NIFTY:'Nifty 50', BANKNIFTY:'Bank Nifty', FINNIFTY:'Fin Nifty'}[d.underlying] || d.underlying;
+  const expFmt = new Date(d.expiry).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
+  const a = d.analysis || {};
+
+  setText('optHead',
+    `${nm} at ${inr(d.spot)} · expires ${expFmt} (${d.days_to_expiry}d) · targeting ~${d.target_pop}% win odds`);
+  setText('optAsOf', 'live');
+
+  // analysis strip
+  setText('optImplied', `±${a.implied_move} (${a.implied_move_pct}%)`);
+  setText('optRealized', a.realized_move != null ? `±${a.realized_move} (${a.realized_move_pct}%)` : '—');
+  setText('optSd1', `${a.sd1_low} – ${a.sd1_high}`);
+  setText('optSd2', `${a.sd2_low} – ${a.sd2_high}`);
+  setText('optZone', `${d.put.breakeven} – ${d.call.breakeven}`);
+  const sig = document.getElementById('optSignal');
+  const sigMap = {rich:['Premium rich — good to sell','trend-bull'],
+                  fair:['Premium fair','trend-hold'],
+                  cheap:['Premium cheap — thin edge','trend-bear'],
+                  unknown:['—','trend-hold']};
+  const [sigTxt, sigCls] = sigMap[a.sell_signal] || sigMap.unknown;
+  sig.textContent = sigTxt; sig.className = 'trend-badge ' + sigCls;
+
+  setText('optCallStrike', `${d.call.strike} CE`);
+  setText('optCallDist',   d.call.distance_pct != null ? `${d.call.distance_pct}% above spot` : '');
+  setText('optCallPrem',   inr(d.call.premium));
+  setText('optCallPop',    `${d.call.pop_pct}% safe`);
+  setText('optCallBe',     d.call.breakeven);
+
+  setText('optPutStrike',  `${d.put.strike} PE`);
+  setText('optPutDist',    d.put.distance_pct != null ? `${Math.abs(d.put.distance_pct)}% below spot` : '');
+  setText('optPutPrem',    inr(d.put.premium));
+  setText('optPutPop',     `${d.put.pop_pct}% safe`);
+  setText('optPutBe',      d.put.breakeven);
+
+  setText('optPlain',
+    `If ${nm} stays between ${d.range_low} and ${d.range_high} by ${expFmt}, you keep all the premium:`);
+  setText('optKeep', inr(d.premium_per_lot) + ' per lot');
+  setText('optKeepSub',
+    `${inr(d.total_premium)} × ${d.lot_size} (lot size) · sell 1 lot each of ${d.call.strike} CE and ${d.put.strike} PE`);
+
+  // candidate ladders (highlight the selected strike)
+  const ladder = (rows, selStrike) => (rows || []).map(c => {
+    const sel = Math.abs(c.strike - selStrike) < 1e-6;
+    return `<tr style="${sel ? 'background:var(--accent-subtle);font-weight:700' : ''}">
+      <td style="text-align:left">${c.strike}${sel ? ' ◄' : ''}</td>
+      <td>${inr(c.premium)}</td>
+      <td><span class="${c.pop_pct >= 80 ? 'g' : c.pop_pct >= 70 ? '' : 'r'}">${c.pop_pct}%</span></td>
+      <td class="d">${c.distance_pct}%</td></tr>`;
+  }).join('');
+  document.getElementById('optCallLadder').innerHTML = ladder(d.call_candidates, d.call.strike);
+  document.getElementById('optPutLadder').innerHTML  = ladder(d.put_candidates, d.put.strike);
+}
+
 // ── Dark mode ─────────────────────────────────────────────────────────────────
 let _symbolsHidden = false;
 function toggleHideSymbols() {
@@ -2650,7 +2975,7 @@ function round4(v) { return Math.round(v * 10000) / 10000; }
 
 async function init() {
   initDark();
-  const validTabs = ['home', 'portfolio', 'minervini', 'ha', 'screener'];
+  const validTabs = ['home', 'portfolio', 'minervini', 'ha', 'screener', 'options'];
   const hashTab = window.location.hash.slice(1);
   if (hashTab && validTabs.includes(hashTab)) goToTab(hashTab);
 

@@ -333,6 +333,56 @@ async def screener(market: str = "india", fresh: bool = False):
     }
 
 
+# ── Weekly option-selling suggester ────────────────────────────────────────────
+
+@app.get("/api/options/weekly")
+async def options_weekly(underlying: str = "NIFTY", risk: str = "balanced"):
+    """Suggest a weekly short-strangle (OTM Call + Put) for the underlying, with
+    strikes placed beyond the market-implied expected move and live premiums.
+    Requires Kite (live NFO option data). Decision-support only — not advice."""
+    status = kite_auth.kite_status()
+    if not status.get("connected"):
+        return {"connected": False, "reason": status.get("reason", "Kite not connected")}
+    import options_seller as ops
+    loop = asyncio.get_event_loop()
+    try:
+        data = await loop.run_in_executor(_executor, ops.suggest, underlying, risk)
+        data["connected"] = True
+        return data
+    except Exception as e:
+        return {"connected": True, "error": str(e)}
+
+
+@app.get("/api/options/backtest")
+async def options_backtest(underlying: str = "NIFTY", risk: str = "balanced",
+                           weeks: int = 5, stop_x: float = 0.0):
+    """Weekly short-strangle backtest on REAL NSE bhavcopy settlement premiums.
+    stop_x>0 applies a fixed 'close at stop_x × credit' defensive rule. No Kite needed."""
+    import options_seller as ops
+    loop = asyncio.get_event_loop()
+    try:
+        return await loop.run_in_executor(_executor, ops.backtest_real, underlying, risk, weeks, stop_x)
+    except Exception as e:
+        return {"error": str(e), "rows": []}
+
+
+@app.get("/api/options/positions")
+async def options_positions():
+    """Open short option legs with live health and adjustment suggestions when a
+    strike is threatened. Requires Kite."""
+    status = kite_auth.kite_status()
+    if not status.get("connected"):
+        return {"connected": False, "reason": status.get("reason", "Kite not connected")}
+    import options_seller as ops
+    loop = asyncio.get_event_loop()
+    try:
+        data = await loop.run_in_executor(_executor, ops.positions)
+        data["connected"] = True
+        return data
+    except Exception as e:
+        return {"connected": True, "error": str(e)}
+
+
 # ── Kite auth ────────────────────────────────────────────────────────────────
 
 @app.get("/api/kite/status")
