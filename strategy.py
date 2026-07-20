@@ -131,6 +131,56 @@ def load_universe_names(market: str = "india") -> dict:
     return names
 
 
+_MCAP_FILES = [
+    os.path.join(os.path.dirname(__file__), "mcap_fy25h2.xlsx"),  # NSE avg MCap Jul–Dec 2025
+]
+_mcap_cache: dict[str, float] = {}   # symbol → market cap in Crores (lazy-loaded)
+
+def load_market_caps() -> dict[str, float]:
+    """Load NSE market cap data (in Crores) from the bundled SEBI/NSE Excel files.
+    Primary file is Jul–Dec 2025; falls back to Jul–Dec 2024 for missing symbols.
+    Cached in-process — call cost after first load is negligible."""
+    global _mcap_cache
+    if _mcap_cache:
+        return _mcap_cache
+    import openpyxl
+    caps: dict[str, float] = {}
+    for path in _MCAP_FILES:
+        if not os.path.exists(path):
+            continue
+        try:
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+            ws = wb.active
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                sym = row[1]
+                val = row[3]
+                if not sym or not isinstance(val, (int, float)):
+                    continue
+                sym = str(sym).strip()
+                if sym not in caps:            # primary file wins
+                    caps[sym] = round(val / 100, 2)   # lakhs → crores
+            wb.close()
+        except Exception:
+            pass
+    _mcap_cache = caps
+    return caps
+
+
+_universe_mcap_cache: list[str] = []
+
+def load_universe_from_mcap(min_cr: float = 500) -> list[str]:
+    """Build NSE universe directly from the MCAP Excel file.
+    Returns .NS tickers for all stocks with MCap >= min_cr Crores.
+    Covers the full NSE listed universe; standard index CSVs miss most 1k–10k Cr stocks."""
+    global _universe_mcap_cache
+    if _universe_mcap_cache:
+        return _universe_mcap_cache
+    caps = load_market_caps()
+    tickers = [sym + ".NS" for sym, mc in caps.items() if mc is not None and mc >= min_cr]
+    _universe_mcap_cache = tickers
+    return tickers
+
+
 def load_universe(market: str = "india") -> list[str]:
     """Tickers for the requested market. US → S&P 500, India → NSE universe CSVs."""
     if market == "us":

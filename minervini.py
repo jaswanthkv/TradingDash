@@ -16,12 +16,28 @@ Ranking: RS Rating — cross-sectional percentile rank of 12-month return (0–9
 Portfolio: top-N qualifying stocks ranked by RS Rating, equal-weight, monthly rebalance
 """
 import warnings; warnings.filterwarnings("ignore")
+import calendar
 import math
 import numpy as np
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 
 import strategy as st
+
+
+def last_business_day(year: int, month: int) -> date:
+    """Last Mon–Fri calendar day of the month (ignores exchange holidays)."""
+    d = date(year, month, calendar.monthrange(year, month)[1])
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def current_month_complete(today: date | None = None) -> bool:
+    """True once we're at/after the month's last business day — the monthly
+    rebalance boundary — so the month counts as a finished period."""
+    today = today or date.today()
+    return today >= last_business_day(today.year, today.month)
 
 BENCHMARK = st.BENCHMARK
 RISK_FREE  = st.RISK_FREE
@@ -57,11 +73,19 @@ def compute_sepa(close: pd.DataFrame,
     stocks = [c for c in close.columns if c != benchmark]
     sc = close[stocks]
 
+    # yfinance occasionally drops a single daily bar. Because the SMAs require a
+    # fully-populated window (min_periods == window), one missing close blanks
+    # sma50/150/200 and wrongly fails every moving-average criterion (c1–c7) for
+    # an otherwise-valid leader. Patch short isolated gaps before the rolling
+    # means so a one-day feed hiccup can't disqualify a stock. The raw close (sc)
+    # is still used for the price-vs-SMA comparisons.
+    sc_ma = sc.ffill(limit=5)
+
     ema9   = sc.ewm(span=9,  adjust=False).mean()
     ema21  = sc.ewm(span=21, adjust=False).mean()
-    sma50  = sc.rolling(50,  min_periods=50).mean()
-    sma150 = sc.rolling(150, min_periods=150).mean()
-    sma200 = sc.rolling(200, min_periods=200).mean()
+    sma50  = sc_ma.rolling(50,  min_periods=50).mean()
+    sma150 = sc_ma.rolling(150, min_periods=150).mean()
+    sma200 = sc_ma.rolling(200, min_periods=200).mean()
 
     # Use intraday High/Low for 52w range if provided (matches NSE display)
     # Fall back to close-based range when not available
@@ -170,7 +194,13 @@ def run_backtest(
     cost_bps: float = 20,
     progress_cb=None,
     market:   str   = "india",
+    held_current: list | None = None,
+    held_month:   str  | None = None,
 ) -> dict:
+    # held_current / held_month: the portfolio you actually hold and the month
+    # (YYYY-MM) it represents. For that month the backtest reports YOUR holdings
+    # and their realised return — matching the live Portfolio tab — instead of
+    # the model's fresh top-N picks.
     def _prog(step, total, msg):
         if progress_cb: progress_cb(step, total, msg)
 
@@ -185,8 +215,11 @@ def run_backtest(
         # Map batch progress into the slice between step 2 and step 3 so the
         # bar visibly advances during the (long) download instead of freezing.
         _prog(2 + (done / total) * 0.9 if total else 2, 5, msg)
+    # Always pull fresh, real prices — never read the same-day pickle cache — so
+    # the backtest reflects live data (and picks up any backfilled bars).
     close, _, high, low = st.download_data(tickers, years=years, include_hl=True,
-                                           benchmark=benchmark, progress_cb=_dl_prog)
+                                           benchmark=benchmark, progress_cb=_dl_prog,
+                                           use_cache=False)
 
     _prog(3, 5, "Computing SEPA criteria …")
     sepa   = compute_sepa(close, high, low, benchmark=benchmark)
@@ -204,8 +237,10 @@ def run_backtest(
 
     _prog(4, 5, f"Walk-forward simulation: {len(rebalance_dates)} months …")
 
-    port_returns: dict  = {}
+    port_returns: dict  = {}   # MODEL returns → KPIs, curve (excludes live month)
     bench_returns: dict = {}
+    disp_returns: dict  = {}   # what the heatmap shows (may include the held month)
+    disp_bench:   dict  = {}
     rebalance_log: list = []
     prev_portfolio: list = []
 
@@ -255,10 +290,18 @@ def run_backtest(
         # Rank by RS Rating descending
         portfolio = list(rs_row[passing].sort_values(ascending=False).head(top_n).index)
 
+        # For the month you actually hold, report YOUR real holdings and their
+        # return (the locked snapshot) — not the model's fresh top-N — so the row
+        # matches the live Portfolio tab. No turnover cost: you're holding, not
+        # churning, and the live tab shows the gross figure.
+        held_row = bool(held_current) and rd_ts.strftime("%Y-%m") == held_month
+        if held_row:
+            portfolio = [t for t in held_current if t in stocks]
+
         added    = [t for t in portfolio if t not in prev_portfolio]
         removed  = [t for t in prev_portfolio if t not in portfolio]
         turnover = len(added) / max(len(portfolio), 1)
-        cost     = turnover * (cost_bps / 10_000) * 2
+        cost     = 0.0 if held_row else turnover * (cost_bps / 10_000) * 2
 
         idx_gte_rd   = close.index[close.index >= rd_ts]
         idx_gte_next = close.index[close.index >= next_rd]
@@ -294,13 +337,22 @@ def run_backtest(
                 bench_monthly = float(b_exit / b_entry - 1)
 
         label = rd_ts.strftime("%Y-%m")
-        # Only count a month if it has fully elapsed. The current calendar month
-        # is still in progress, so its partial return must not feed the metrics
-        # (CAGR, totals, curve) — we keep the holdings row but with no return.
-        is_incomplete = label == date.today().strftime("%Y-%m")
-        if not is_incomplete:
+        is_current = label == date.today().strftime("%Y-%m")
+
+        # KPIs / curve use the MODEL track and EXCLUDE the live current month and
+        # any discretionary held month, so neither an in-progress month nor your
+        # hand-picked holdings distort CAGR / Sharpe / total return.
+        if not (is_current or held_row):
             port_returns[label]  = port_monthly
             bench_returns[label] = bench_monthly
+
+        # Display (heatmap + history row): show the current month only when it
+        # carries a real figure — your held portfolio's MTD return, or the model's
+        # once the month has fully elapsed. Otherwise hide the partial month.
+        shown = (not is_current) or held_row or current_month_complete()
+        if shown:
+            disp_returns[label] = port_monthly
+            disp_bench[label]   = bench_monthly
 
         top5 = [{"ticker": t, "rs_rating": round(float(rs_row[t]), 1)}
                 for t in portfolio[:5] if t in rs_row.index]
@@ -312,8 +364,9 @@ def run_backtest(
             "removed":        removed,
             "qualifying":     len(passing),
             "turnover_pct":   round(turnover * 100, 1),
-            "period_ret_pct": None if is_incomplete else round(port_monthly * 100, 2),
-            "bench_ret_pct":  None if is_incomplete else round(bench_monthly * 100, 2),
+            "period_ret_pct": round(port_monthly * 100, 2)  if shown else None,
+            "bench_ret_pct":  round(bench_monthly * 100, 2) if shown else None,
+            "is_held_month":  bool(held_row),
             "top5":           top5,
         })
         prev_portfolio = portfolio[:]
@@ -356,8 +409,8 @@ def run_backtest(
         "dates":             list(strat_r.index),
         "strategy_curve":    [round(float(v), 4) for v in strat_curve],
         "benchmark_curve":   [round(float(v), 4) for v in bench_curve],
-        "monthly_returns":   _monthly_grid(strat_r),
-        "monthly_bench":     _monthly_grid(bench_r),
+        "monthly_returns":   _monthly_grid(pd.Series(disp_returns)),
+        "monthly_bench":     _monthly_grid(pd.Series(disp_bench)),
         "rebalance_history": rebalance_log,
         "current_screen":    current_screen,
         "criteria_labels":   CRITERIA_LABELS,
@@ -371,24 +424,28 @@ def run_backtest(
 
 def screen_on_date(sepa: dict, close: pd.DataFrame, ref_date: pd.Timestamp,
                    stocks: list) -> list:
-    """Return all stocks with criteria breakdown, sorted: full pass → RS Rating desc."""
-    avail = close.index[close.index <= ref_date]
-    if avail.empty:
-        return []
-    dt = avail[-1]
+    """Return all stocks with criteria breakdown, sorted: full pass → RS Rating desc.
 
-    if dt not in sepa["sepa_pass"].index:
+    Each stock is evaluated at ITS OWN latest valid close on/before ref_date, so a
+    name with a one-day data gap (or an uneven yfinance response that lacks a bar on
+    the single most-recent frame date) is not silently dropped from the screen."""
+    idx = close.index[close.index <= ref_date]
+    if idx.empty:
         return []
 
     rows = []
     for t in stocks:
         if t not in close.columns:
             continue
-        price = close.loc[dt, t] if t in close.columns else None
-        if price is None or pd.isna(price) or price <= 0:
+        # This stock's own last valid (>0) close on/before ref_date.
+        col = close[t].reindex(idx)
+        col = col[col.notna() & (col > 0)]
+        if col.empty:
             continue
+        dt    = col.index[-1]
+        price = float(col.iloc[-1])
 
-        def _get(key):
+        def _get(key, dt=dt, t=t):
             df = sepa.get(key)
             if df is None or t not in df.columns or dt not in df.index:
                 return None

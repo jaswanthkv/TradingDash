@@ -412,7 +412,6 @@ html{scroll-behavior:smooth}
 .perf-val{font-size:15px;font-weight:800;color:var(--t1)}
 .perf-alpha{font-size:11px;color:var(--t3)}
 /* hide symbols mode */
-.symbols-hidden .sym-cell{filter:blur(5px);user-select:none;pointer-events:none}
 /* edit holdings mode */
 
 </style>
@@ -426,12 +425,8 @@ html{scroll-behavior:smooth}
     <span class="side-logo-sm">Q<span>D</span></span>
   </div>
   <nav class="side-nav">
-    <button class="tab active" onclick="switchTab('home',this)"><span class="ti">🏠</span><span class="tl">Home</span></button>
-    <button class="tab" id="tabPortfolio" onclick="switchTab('portfolio',this)"><span class="ti">💼</span><span class="tl">Portfolio</span></button>
-    <button class="tab" onclick="switchTab('minervini',this)"><span class="ti">📈</span><span class="tl">Backtest</span></button>
-    <button class="tab" onclick="switchTab('screener',this)"><span class="ti">🔍</span><span class="tl">Screener</span></button>
+    <button class="tab active" onclick="switchTab('screener',this)"><span class="ti">🔍</span><span class="tl">Screener</span></button>
     <button class="tab" onclick="switchTab('ha',this)"><span class="ti">⚡</span><span class="tl">Pulse</span></button>
-    <button class="tab" onclick="switchTab('options',this)"><span class="ti">🎯</span><span class="tl">Sell Options</span></button>
   </nav>
   <div class="side-foot">
     <span class="last-upd" id="navUpdated"></span>
@@ -445,400 +440,6 @@ html{scroll-behavior:smooth}
 <!-- ── main content ── -->
 <main class="main">
 
-<!-- ── KPI bar (hidden on home) ── -->
-<div class="kpi-bar" id="kpiBar" style="display:none">
-  <!-- Group 1: Performance -->
-  <div class="kpi highlight">
-    <div class="kpi-group">Performance</div>
-    <div class="kpi-label">Strategy CAGR</div>
-    <div class="kpi-value" id="k-cagr">—</div>
-    <div class="kpi-sub" id="k-alpha">vs benchmark</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-group">&nbsp;</div>
-    <div class="kpi-label" id="k-bcagr-label">Nifty 500 CAGR</div>
-    <div class="kpi-value" id="k-bcagr">—</div>
-    <div class="kpi-sub" id="k-bperiod">—</div>
-  </div>
-  <!-- Group 2: Risk -->
-  <div class="kpi group-start">
-    <div class="kpi-group">Risk</div>
-    <div class="kpi-label">Sharpe Ratio</div>
-    <div class="kpi-value" id="k-sharpe">—</div>
-    <div class="kpi-sub" id="k-sortino">—</div>
-  </div>
-  <div class="kpi neg">
-    <div class="kpi-group">&nbsp;</div>
-    <div class="kpi-label">Max Drawdown</div>
-    <div class="kpi-value" id="k-mdd">—</div>
-    <div class="kpi-sub" id="k-calmar">—</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-group">&nbsp;</div>
-    <div class="kpi-label">Win Rate</div>
-    <div class="kpi-value" id="k-wr">—</div>
-    <div class="kpi-sub" id="k-months">— months</div>
-  </div>
-  <!-- Group 3: Returns -->
-  <div class="kpi group-start">
-    <div class="kpi-group">Returns</div>
-    <div class="kpi-label">Backtest Total</div>
-    <div class="kpi-value" id="k-total">—</div>
-    <div class="kpi-sub" id="k-period">backtest period</div>
-  </div>
-  <div class="kpi highlight">
-    <div class="kpi-group">&nbsp;</div>
-    <div class="kpi-label" id="k-ytd-label">Current Year</div>
-    <div class="kpi-value" id="k-ytd">—</div>
-    <div class="kpi-sub" id="k-ytd-sub">—</div>
-  </div>
-  <!-- Group 4: Portfolio -->
-  <div class="kpi group-start">
-    <div class="kpi-group">Portfolio</div>
-    <div class="kpi-label">Universe</div>
-    <div class="kpi-value" id="k-univ">—</div>
-    <div class="kpi-sub">eligible stocks</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-group">&nbsp;</div>
-    <div class="kpi-label">Holdings</div>
-    <div class="kpi-value b" id="k-topn">20</div>
-    <div class="kpi-sub" id="k-topn-sub">equal-weight</div>
-  </div>
-</div>
-
-<!-- ════════════════════ HOME TAB ════════════════════ -->
-<div class="tab-pane active" id="tab-home">
-
-  <div class="home-hero">
-    <div class="home-badge">NSE · India · Systematic Equity</div>
-    <div class="home-title">Quant<span>Desk</span></div>
-    <div class="home-sub">Institutional-grade, rules-based strategies for NSE-listed equities — backtested, transparent, and ready to deploy.</div>
-  </div>
-
-  <div class="strategy-grid">
-
-    <!-- Pulse (HA) Strategy card -->
-    <div class="s-card" onclick="goToTab('ha')">
-      <div class="s-card-icon">⚡</div>
-      <div class="s-card-name">Pulse — Trend Filter</div>
-      <div class="s-card-desc">A regime-detection model that reads NIFTY 50 market structure using Heikin-Ashi candlestick signals and EMA trend filters. Enters long when the trend confirms; exits to cash when it breaks. Integrated with Zerodha Kite for live execution.</div>
-      <div class="s-card-tags">
-        <span class="s-tag">NIFTY 50</span>
-        <span class="s-tag">Intraday</span>
-        <span class="s-tag">Kite Live</span>
-      </div>
-      <div class="s-sparkline" id="spark-ha"></div>
-      <button class="s-card-cta">View Strategy →</button>
-    </div>
-
-    <!-- Minervini SEPA card -->
-    <div class="s-card" onclick="goToTab('minervini')">
-      <div class="s-card-icon">🏆</div>
-      <div class="s-card-name">Trend Breakout</div>
-      <div class="s-card-desc">A rigorous 9-criteria price-structure filter that identifies stocks entering a confirmed Stage 2 uptrend — defined by moving average alignment, 52-week range position, and upward slope. Holdings are ranked by Relative Strength rating against the full NSE universe.</div>
-      <div class="s-card-tags">
-        <span class="s-tag">NSE Equities</span>
-        <span class="s-tag">Monthly Rebalance</span>
-        <span class="s-tag">Trend-Following</span>
-      </div>
-      <div class="s-sparkline" id="spark-min"></div>
-      <button class="s-card-cta">View Strategy →</button>
-    </div>
-
-  </div>
-</div>
-
-<!-- ════════════════════ PORTFOLIO TAB ════════════════════ -->
-<div class="tab-pane" id="tab-portfolio">
-
-  <!-- meta bar -->
-  <div class="port-meta">
-    <span style="font-weight:700;color:var(--t1)">Strategy Portfolios</span>
-    <select id="pf-market" onchange="onPfMarketChange()" style="font-size:12px;padding:3px 6px">
-      <option value="india" selected>🇮🇳 India · Nifty</option>
-      <option value="us">🇺🇸 US · S&amp;P 500</option>
-    </select>
-    <span id="portLastUpd" class="d" style="font-size:11px">—</span>
-    <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
-      <span id="portRebalBadge" class="rebal-badge" style="display:none"></span>
-      <button class="btn btn-ghost btn-sm" id="btnHideSymbols" onclick="toggleHideSymbols()" title="Hide stock names">👁 Hide Names</button>
-      <button class="btn btn-ghost btn-sm" onclick="loadPortfolio(true)">↻ Refresh</button>
-    </span>
-  </div>
-
-  <!-- skeleton loading -->
-  <div id="portLoading" style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div class="card" style="padding:16px">
-      <div class="skel skel-header"></div>
-      <div class="skel skel-block"></div>
-      <div class="skel-row" style="padding:8px 0;border:none"><div class="skel skel-line w90"></div></div>
-      <div class="skel-row" style="padding:6px 0;border:none"><div class="skel skel-line w70"></div></div>
-      <div class="skel-row" style="padding:6px 0;border:none"><div class="skel skel-line w80"></div></div>
-      <div class="skel-row" style="padding:6px 0;border:none"><div class="skel skel-line w50"></div></div>
-    </div>
-    <div class="card" style="padding:16px">
-      <div class="skel skel-header"></div>
-      <div class="skel skel-block"></div>
-      <div class="skel-row" style="padding:8px 0;border:none"><div class="skel skel-line w90"></div></div>
-      <div class="skel-row" style="padding:6px 0;border:none"><div class="skel skel-line w60"></div></div>
-      <div class="skel-row" style="padding:6px 0;border:none"><div class="skel skel-line w75"></div></div>
-    </div>
-  </div>
-
-  <!-- error -->
-  <div id="portError" class="empty hidden">
-    <div class="empty-icon">⚠️</div>
-    <div class="empty-title" id="portErrorMsg">Something went wrong</div>
-    <div class="empty-sub">Run the Trend Breakout backtest first, then refresh.</div>
-  </div>
-
-  <!-- content -->
-  <div id="portContent" class="hidden">
-
-    <!-- Performance comparison bar -->
-    <!-- Performance comparison cards -->
-    <div id="portDayBar" class="perf-grid">
-      <div class="perf-card">
-        <div class="perf-card-head">
-          <span class="perf-card-label">Today</span>
-          <span id="dayAsOf" class="perf-card-date"></span>
-        </div>
-        <div class="perf-row">
-          <span class="perf-name" id="dayBenchLabel">Nifty 500</span>
-          <div class="perf-right"><span id="dayN500" class="perf-val">—</span></div>
-        </div>
-        <div class="perf-row">
-          <span class="perf-name" style="color:#f59e0b">My Portfolio</span>
-          <div class="perf-right">
-            <span id="dayMin" class="perf-val">—</span>
-            <span id="dayMinDiff" class="perf-alpha"></span>
-          </div>
-        </div>
-      </div>
-      <div class="perf-card">
-        <div class="perf-card-head">
-          <span class="perf-card-label">This Month</span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span id="mtdAsOf" class="perf-card-date"></span>
-            <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px" onclick="loadDayChange()">↻</button>
-          </div>
-        </div>
-        <div class="perf-row">
-          <span class="perf-name" id="mtdBenchLabel">Nifty 500</span>
-          <div class="perf-right"><span id="mtdN500" class="perf-val">—</span></div>
-        </div>
-        <div class="perf-row">
-          <span class="perf-name" style="color:#f59e0b">My Portfolio</span>
-          <div class="perf-right">
-            <span id="mtdMin" class="perf-val">—</span>
-            <span id="mtdMinDiff" class="perf-alpha"></span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Portfolio vs Index growth chart -->
-    <div class="page">
-      <div class="card">
-        <div class="card-head">
-          <span class="card-title" id="vsIndexTitle">📈 My Portfolio vs Nifty 500</span>
-          <div style="display:flex;align-items:center;gap:12px">
-            <span id="vsIndexMeta" class="d" style="font-size:11px">—</span>
-            <div id="vsIndexRange" style="display:flex;gap:4px">
-              <button class="btn btn-ghost btn-sm vs-range" data-r="mtd" style="padding:2px 8px;font-size:11px">This Month</button>
-              <button class="btn btn-ghost btn-sm vs-range" data-r="1" style="padding:2px 8px;font-size:11px">1M</button>
-              <button class="btn btn-ghost btn-sm vs-range active" data-r="3" style="padding:2px 8px;font-size:11px">3M</button>
-              <button class="btn btn-ghost btn-sm vs-range" data-r="6" style="padding:2px 8px;font-size:11px">6M</button>
-              <button class="btn btn-ghost btn-sm vs-range" data-r="12" style="padding:2px 8px;font-size:11px">1Y</button>
-            </div>
-          </div>
-        </div>
-        <div id="vsIndexEmpty" class="empty hidden" style="padding:24px">
-          <div class="empty-title" style="font-size:13px">No holdings to chart yet</div>
-          <div class="empty-sub">Run the Trend Breakout backtest first.</div>
-        </div>
-        <div id="vsIndexChartWrap" class="chart-wrap"><canvas id="portVsIndexChart"></canvas></div>
-      </div>
-    </div>
-
-    <div class="page">
-      <div style="display:grid;grid-template-columns:1fr;gap:16px">
-
-        <!-- Minervini SEPA card -->
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">🏆 My Portfolio</span>
-            <span id="minPortAsOf" class="d" style="font-size:11px">—</span>
-          </div>
-          <div id="minPortEmpty" class="empty" style="padding:24px">
-            <div class="empty-title" style="font-size:13px">No Trend Breakout backtest yet</div>
-            <div class="empty-sub">Go to Trend Breakout tab and run backtest first.</div>
-          </div>
-          <div id="minPortTable" class="hidden">
-            <div class="tbl-wrap" style="max-height:420px">
-              <table>
-                <thead><tr>
-                  <th style="text-align:left">Symbol</th>
-                  <th>RS Rating</th>
-                  <th>Price (₹)</th>
-                  <th>Entry (₹)</th>
-                  <th>Today %</th>
-                  <th>Month %</th>
-                </tr></thead>
-                <tbody id="minPortBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- ════════════════════ MINERVINI TAB ════════════════════ -->
-<div class="tab-pane" id="tab-minervini">
-
-  <!-- ── Minervini: Backtest ── -->
-  <div class="min-pane active" id="min-backtest">
-    <div class="param-row">
-      <div class="param-group">
-        <label>Market</label>
-        <select id="mv-market" onchange="onMarketChange()">
-          <option value="india" selected>🇮🇳 India · Nifty</option>
-          <option value="us">🇺🇸 US · S&amp;P 500</option>
-        </select>
-      </div>
-      <div class="param-sep">·</div>
-      <div class="param-group">
-        <label>Years</label>
-        <select id="mv-years">
-          <option value="3">3 years</option>
-          <option value="5" selected>5 years</option>
-          <option value="7">7 years</option>
-          <option value="10">10 years</option>
-        </select>
-      </div>
-      <div class="param-sep">·</div>
-      <div class="param-group">
-        <label>Top N</label>
-        <select id="mv-topn">
-          <option value="10">10</option>
-          <option value="20" selected>20</option>
-          <option value="30">30</option>
-        </select>
-      </div>
-      <div class="param-sep">·</div>
-      <div class="param-group">
-        <label>Cost (bps)</label>
-        <input id="mv-cost" type="number" value="20" min="0" max="100" style="width:60px"/>
-      </div>
-      <div class="param-sep">·</div>
-      <button class="btn btn-primary" id="btnMin" onclick="runMinervini()">▶ Run Backtest</button>
-      <div id="minStatus" class="hidden" style="display:flex;align-items:center;gap:8px">
-        <div class="spinner"></div>
-        <span class="status-text" id="minStatusMsg">Running…</span>
-        <div class="progress-bar-wrap" style="width:120px">
-          <div class="progress-bar-fill" id="minProgress" style="width:0%"></div>
-        </div>
-      </div>
-    </div>
-
-    <div id="minEmpty" class="page">
-      <div class="empty">
-        <div class="empty-icon">📐</div>
-        <div class="empty-title">No backtest result yet</div>
-        <div class="empty-sub">Runs a walk-forward strategy — stocks passing all 9 price-structure criteria,<br>ranked by Relative Strength rating. First run ~60–90s while data downloads.</div>
-      </div>
-    </div>
-
-    <div id="minResults" class="hidden">
-      <div class="page" style="display:grid;gap:16px">
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title" id="minGrowthTitle">Portfolio Growth (₹1 invested)</span>
-            <div style="display:flex;gap:16px;font-size:11px;color:var(--t2)">
-              <span><span style="color:var(--accent)">●</span> Trend Breakout</span>
-              <span><span style="color:var(--t3)">●</span> <span id="minGrowthLegendBench">Nifty 500</span></span>
-            </div>
-          </div>
-          <div class="chart-wrap"><canvas id="minGrowthChart"></canvas></div>
-        </div>
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title" id="minHeatTitle">Monthly Returns Heatmap — Strategy vs Nifty 500</span>
-            <span style="font-size:11px;color:var(--t3)">green = positive · red = negative</span>
-          </div>
-          <div class="card-body" style="padding:0">
-            <div class="heatmap-wrap" id="minHeatmapWrap"></div>
-          </div>
-        </div>
-        <div class="trade-panel" id="minTradePanel">
-          <div class="trade-panel-head">
-            <span class="trade-panel-title">⚡ Execute Rebalance via Kite</span>
-            <span style="font-size:11px;color:var(--t3)">Latest rebalance only · CNC Market orders</span>
-          </div>
-          <div style="padding:14px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-            <div class="param-group">
-              <label>Mode</label>
-              <select id="min-trade-mode" onchange="_updatePerStockLabel('min')">
-                <option value="fresh">Fresh Start</option>
-                <option value="rebalance">Rebalance</option>
-              </select>
-            </div>
-            <div class="param-sep">·</div>
-            <div class="param-group">
-              <label>Total Capital (₹)</label>
-              <input id="min-capital" type="number" value="500000" step="50000" min="100000" style="width:130px" oninput="_updatePerStockLabel('min')"/>
-            </div>
-            <div style="font-size:11px;color:var(--t2)" id="min-per-stock-label">₹25,000 per stock (20 stocks)</div>
-            <button class="btn btn-ghost btn-sm" onclick="previewOrders('min')">Preview Orders</button>
-            <span id="minTradeStatus" style="font-size:11px;color:var(--t3)"></span>
-          </div>
-          <div id="minOrderPreview" class="hidden">
-            <div id="minOrderRows"></div>
-            <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
-              border-top:1px solid var(--border-inner);background:var(--bg-alt)">
-              <div style="font-size:12px;color:var(--t2)" id="minOrderSummary"></div>
-              <button class="btn btn-primary btn-sm" onclick="executeOrders('min')" id="minExecBtn">
-                Execute All Orders
-              </button>
-            </div>
-            <div class="trade-warning">
-              ⚠️ Market orders will be placed immediately on Kite. Only run during market hours (9:15 AM – 3:30 PM). This action is irreversible.
-            </div>
-          </div>
-          <div id="minOrderResults" class="hidden">
-            <div id="minResultRows"></div>
-            <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;
-              border-top:1px solid var(--border-inner);background:var(--bg-alt)">
-              <span style="font-size:12px;color:var(--t2)" id="minResultSummary"></span>
-              <button class="btn btn-ghost btn-sm hidden" id="minRetryBtn"
-                onclick="retryFailedOrders('min')" style="margin-left:auto;color:var(--accent)">
-                ↻ Retry Failed
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">Rebalancing History</span>
-            <span id="minHistMeta" style="font-size:11px;color:var(--t3)"></span>
-          </div>
-          <div id="minHistResults" style="display:grid;grid-template-columns:1fr 2fr">
-            <div style="border-right:1px solid var(--border);overflow-y:auto;max-height:420px" id="minHistList"></div>
-            <div id="minHistDetail" style="overflow-y:auto;max-height:420px"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
 <!-- ════════════════════ SCREENER TAB ════════════════════ -->
 <div class="tab-pane" id="tab-screener">
   <div class="param-row" style="gap:12px;flex-wrap:wrap">
@@ -849,11 +450,24 @@ html{scroll-behavior:smooth}
         <option value="us">🇺🇸 US · S&amp;P 500</option>
       </select>
     </div>
-    <div class="param-sep">·</div>
+    <div class="param-sep" id="scrMcapSep1">·</div>
+    <div class="param-group" id="scrMcapGroup" style="display:none">
+      <label>MCap (Cr)</label>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" id="scrMcapMin" value="1000" min="0" step="100"
+               style="width:80px" onchange="applyMcapFilter()" onkeydown="if(event.key==='Enter')applyMcapFilter()">
+        <span style="color:var(--t3);font-size:12px">–</span>
+        <input type="number" id="scrMcapMax" value="10000" min="0" step="100"
+               style="width:90px" onchange="applyMcapFilter()" onkeydown="if(event.key==='Enter')applyMcapFilter()">
+        <button class="btn btn-ghost btn-sm" onclick="clearMcapFilter()" title="Clear MCap filter" style="padding:2px 6px;font-size:11px">×</button>
+      </div>
+    </div>
+    <div class="param-sep" id="scrMcapSep2" style="display:none">·</div>
     <span id="screenCount" style="font-size:11px;color:var(--t3)"></span>
     <span style="margin-left:auto;display:flex;align-items:center;gap:10px">
       <span id="screenAsOf" class="d" style="font-size:11px"></span>
       <button class="btn btn-ghost btn-sm" onclick="loadScreener(true)" title="Force a live re-pull of the latest prices">↻ Refresh (live)</button>
+      <button class="btn btn-ghost btn-sm" onclick="downloadScreenerCSV()" title="Download current screener as CSV">⬇ CSV</button>
     </span>
   </div>
 
@@ -869,7 +483,7 @@ html{scroll-behavior:smooth}
     <div class="empty">
       <div class="spinner" style="margin:0 auto 12px"></div>
       <div class="empty-title">Screening…</div>
-      <div class="empty-sub">First load of the day downloads prices (~1 min); after that it's instant.</div>
+      <div class="empty-sub">First load of the day downloads ~1700 NSE stocks (~3–5 min); after that it's instant from cache.</div>
     </div>
   </div>
 
@@ -879,170 +493,19 @@ html{scroll-behavior:smooth}
         <thead><tr>
           <th style="text-align:left">Company</th>
           <th id="screenPriceHdr">Price</th>
+          <th id="screenMcapHdr" class="tt" data-tip="Market Capitalisation in Crores (NSE avg Jul–Dec 2025)" onclick="setScrSort('mcap')">MCap (Cr)</th>
           <th class="tt" data-tip="Bullish: price above 50 &amp; 200 · Bearish: below both · Hold: mixed">Total Trend</th>
           <th>9 Day EMA</th><th>% Var</th>
           <th>21 Day EMA</th><th>% Var</th>
           <th>50 Day SMA</th><th>% Var</th>
           <th>200 Day SMA</th><th>% Var</th>
-          <th class="tt" data-tip="RS Rating: percentile rank of 12-month return (0–99)">RS</th>
+          <th class="tt" data-tip="RS Rating: percentile rank of 12-month return (0–99)" onclick="setScrSort('rs')" style="cursor:pointer;user-select:none">RS</th>
         </tr></thead>
         <tbody id="screenBody"></tbody>
       </table>
     </div>
   </div>
 </div>
-
-<!-- ════════════════════ SELL OPTIONS TAB ════════════════════ -->
-<div class="tab-pane" id="tab-options">
-  <div class="param-row" style="gap:12px;flex-wrap:wrap">
-    <div class="param-group">
-      <label>Index</label>
-      <select id="opt-underlying" onchange="loadOptions()">
-        <option value="NIFTY" selected>Nifty 50</option>
-        <option value="BANKNIFTY">Bank Nifty</option>
-        <option value="FINNIFTY">Fin Nifty</option>
-      </select>
-    </div>
-    <div class="param-sep">·</div>
-    <div class="param-group">
-      <label>Safety</label>
-      <select id="opt-risk" onchange="loadOptions()">
-        <option value="conservative">Safer (further away)</option>
-        <option value="balanced" selected>Balanced</option>
-        <option value="aggressive">More premium (closer)</option>
-      </select>
-    </div>
-    <span style="margin-left:auto;display:flex;align-items:center;gap:10px">
-      <span id="optAsOf" class="d" style="font-size:11px"></span>
-      <button class="btn btn-ghost btn-sm" onclick="loadOptions()">↻ Refresh</button>
-    </span>
-  </div>
-
-  <div class="page" style="max-width:760px;margin:0 auto">
-    <!-- Open positions + adjustments (only shows when you hold short options) -->
-    <div id="optPositions" style="margin-bottom:18px"></div>
-
-    <div id="optConnect" class="empty hidden" style="padding:40px">
-      <div class="empty-icon">🔌</div>
-      <div class="empty-title">Connect Kite to see live strikes</div>
-      <div class="empty-sub">Live option prices come from your Zerodha account.</div>
-      <button class="btn btn-primary" style="margin-top:14px" onclick="location.href='/api/kite/login'">Connect Kite</button>
-    </div>
-
-    <div id="optLoading" class="empty hidden" style="padding:40px">
-      <div class="spinner" style="margin:0 auto 12px"></div>
-      <div class="empty-title">Finding this week's strikes…</div>
-    </div>
-
-    <div id="optError" class="empty hidden" style="padding:40px">
-      <div class="empty-icon">⚠️</div>
-      <div class="empty-title">Couldn't load</div>
-      <div class="empty-sub" id="optErrorMsg"></div>
-    </div>
-
-    <div id="optContent" class="hidden">
-      <div style="text-align:center;margin:8px 0 14px">
-        <div style="font-size:13px;color:var(--t3)">This week, sell these two strikes 👇</div>
-        <div id="optHead" style="font-size:13px;color:var(--t2);margin-top:6px"></div>
-      </div>
-
-      <!-- Quant analysis strip -->
-      <div class="card" style="padding:14px 18px;margin-bottom:16px">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-          <div style="font-size:12px;color:var(--t2)">
-            Market expects <b id="optImplied">—</b> this week ·
-            recent realized <b id="optRealized">—</b>
-          </div>
-          <span id="optSignal" class="trend-badge trend-hold">—</span>
-        </div>
-        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--t3)">
-          <span>Likely range (1σ, ~68%): <b id="optSd1" style="color:var(--t1)">—</b></span>
-          <span>Outer range (2σ, ~95%): <b id="optSd2" style="color:var(--t1)">—</b></span>
-          <span>Profit zone (breakevens): <b id="optZone" style="color:var(--green)">—</b></span>
-        </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <!-- SELL CALL -->
-        <div class="card" style="text-align:center;padding:22px;border-top:3px solid var(--red)">
-          <div style="font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--red)">SELL CALL (CE)</div>
-          <div id="optCallStrike" style="font-size:34px;font-weight:800;color:var(--t1);margin:8px 0">—</div>
-          <div style="font-size:12px;color:var(--t3)" id="optCallDist"></div>
-          <div style="margin-top:14px;font-size:12px;color:var(--t3)">You collect</div>
-          <div id="optCallPrem" class="g" style="font-size:24px;font-weight:800">—</div>
-          <div style="margin-top:8px;font-size:11px;color:var(--t3)"><span id="optCallPop" style="font-weight:700;color:var(--green)"></span> · BE <span id="optCallBe"></span></div>
-        </div>
-        <!-- SELL PUT -->
-        <div class="card" style="text-align:center;padding:22px;border-top:3px solid var(--green)">
-          <div style="font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--green)">SELL PUT (PE)</div>
-          <div id="optPutStrike" style="font-size:34px;font-weight:800;color:var(--t1);margin:8px 0">—</div>
-          <div style="font-size:12px;color:var(--t3)" id="optPutDist"></div>
-          <div style="margin-top:14px;font-size:12px;color:var(--t3)">You collect</div>
-          <div id="optPutPrem" class="g" style="font-size:24px;font-weight:800">—</div>
-          <div style="margin-top:8px;font-size:11px;color:var(--t3)"><span id="optPutPop" style="font-weight:700;color:var(--green)"></span> · BE <span id="optPutBe"></span></div>
-        </div>
-      </div>
-
-      <div class="card" style="margin-top:16px;padding:20px;text-align:center;background:var(--bg-alt)">
-        <div style="font-size:13px;color:var(--t2)" id="optPlain"></div>
-        <div style="font-size:26px;font-weight:800;color:var(--green);margin-top:6px" id="optKeep">—</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:4px" id="optKeepSub"></div>
-      </div>
-
-      <!-- Candidate ladders -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
-        <div class="card" style="padding:0;overflow:hidden">
-          <div class="card-head" style="padding:10px 14px"><span class="card-title" style="font-size:12px;color:var(--red)">Call strikes</span></div>
-          <table style="width:100%"><thead><tr><th style="text-align:left">Strike</th><th>Premium</th><th>POP</th><th>Dist</th></tr></thead><tbody id="optCallLadder"></tbody></table>
-        </div>
-        <div class="card" style="padding:0;overflow:hidden">
-          <div class="card-head" style="padding:10px 14px"><span class="card-title" style="font-size:12px;color:var(--green)">Put strikes</span></div>
-          <table style="width:100%"><thead><tr><th style="text-align:left">Strike</th><th>Premium</th><th>POP</th><th>Dist</th></tr></thead><tbody id="optPutLadder"></tbody></table>
-        </div>
-      </div>
-
-      <div style="font-size:11px;color:var(--t3);margin-top:16px;line-height:1.7;text-align:center">
-        ⚠️ Selling options can lose much more than the premium if the index moves past your strikes.
-        POP = model probability the strike expires worthless (normal model on the implied move) — an estimate, not a guarantee.
-        Decision-support only, not advice. You place the trade yourself.
-      </div>
-    </div>
-
-    <!-- How did this do? 5-week backtest -->
-    <div class="card" style="margin-top:18px;padding:16px">
-      <div class="card-head" style="padding:0 0 6px">
-        <span class="card-title">📅 How did this do? — last 5 weeks</span>
-        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <select id="opt-weeks" onchange="loadOptBacktest()" style="font-size:12px;padding:3px 6px" title="Lookback">
-            <option value="8">8 weeks</option>
-            <option value="13">3 months</option>
-            <option value="26">6 months</option>
-            <option value="52" selected>1 year</option>
-            <option value="156">3 years</option>
-          </select>
-          <select id="opt-stop" onchange="loadOptBacktest()" style="font-size:12px;padding:3px 6px" title="Defense">
-            <option value="0">No stop</option>
-            <option value="2" selected>Stop 2× credit</option>
-            <option value="2.5">Stop 2.5×</option>
-            <option value="3">Stop 3×</option>
-          </select>
-          <button class="btn btn-ghost btn-sm" onclick="loadOptBacktest()">Run</button>
-        </span>
-      </div>
-      <div id="optBtHint" style="font-size:11px;color:var(--t3)">
-        Sells the same strangle (current Index + Safety) each week. "Real NSE data" uses actual settlement premiums; "Defense" closes early if the loss hits N× the credit.
-      </div>
-      <div id="optBtLoading" class="hidden" style="padding:20px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
-      <div id="optBtResult" class="hidden">
-        <div id="optBtSummary" style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;margin:8px 0 12px"></div>
-        <div class="tbl-wrap"><table style="width:100%"><thead><tr>
-          <th style="text-align:left">Week</th><th>Spot move</th><th>Sold</th><th>Premium</th><th>Result</th><th>P&L</th>
-        </tr></thead><tbody id="optBtBody"></tbody></table></div>
-      </div>
-    </div>
-  </div>
-</div>
-
 
 <!-- ════════════════════ HA STRATEGY TAB ════════════════════ -->
 <div class="tab-pane" id="tab-ha">
@@ -1170,96 +633,6 @@ html{scroll-behavior:smooth}
     </div>
   </div>
 
-  <!-- Backtest section divider -->
-  <div class="section-divider">Backtest</div>
-
-  <div class="param-row">
-    <div class="param-group">
-      <label>From</label>
-      <input type="date" id="ha-from" style="width:130px"/>
-    </div>
-    <div class="param-sep">·</div>
-    <div class="param-group">
-      <label>To</label>
-      <input type="date" id="ha-to" style="width:130px"/>
-    </div>
-    <div class="param-sep">·</div>
-    <div class="param-group">
-      <label>Mode</label>
-      <select id="ha-mode" onchange="toggleHAMode()">
-        <option value="futures">Futures</option>
-        <option value="options_sell">Options — Sell</option>
-        <option value="options_buy">Options — Buy</option>
-      </select>
-    </div>
-    <div class="param-sep">·</div>
-    <div class="param-group" id="ha-sl-pts-wrap">
-      <label>SL (pts)</label>
-      <input id="ha-sl-pts" type="number" value="0" min="0" step="50" style="width:70px"/>
-    </div>
-    <div class="param-group hidden" id="ha-sl-pct-wrap">
-      <label>SL (%)</label>
-      <input id="ha-sl-pct" type="number" value="50" min="1" max="100" style="width:60px"/>
-    </div>
-    <div class="param-sep">·</div>
-    <div class="param-group">
-      <label>Lots</label>
-      <input id="ha-lots" type="number" value="1" min="1" max="50" style="width:55px"/>
-    </div>
-    <div class="param-sep">·</div>
-    <button class="btn btn-primary" id="btnHA" onclick="runHA()">▶ Run Backtest</button>
-    <div id="haStatus" class="hidden" style="display:flex;align-items:center;gap:8px">
-      <div class="spinner"></div>
-      <span class="status-text" id="haStatusMsg">Fetching data from Kite…</span>
-    </div>
-  </div>
-
-  <div id="haEmpty" class="page">
-    <div class="empty">
-      <div class="empty-icon">🕯️</div>
-      <div class="empty-title">No result yet</div>
-      <div class="empty-sub">Heikin-Ashi 30-min positional strategy on NIFTY.<br>
-        Connects to Kite for historical data. Connect Kite first if not already done.</div>
-    </div>
-  </div>
-
-  <div id="haResults" class="hidden">
-    <div class="page" style="display:grid;gap:16px">
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px" id="haKpiGrid"></div>
-      <div class="card">
-        <div class="card-head"><span class="card-title">Cumulative P&amp;L (₹)</span></div>
-        <div class="chart-wrap"><canvas id="haEquityChart"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-head"><span class="card-title">Monthly P&amp;L Heatmap (₹)</span></div>
-        <div style="overflow-x:auto;padding:4px 0" id="haHeatmap"></div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <span class="card-title">Trade Log</span>
-          <span id="haTradeCount" style="font-size:11px;color:var(--t3)"></span>
-        </div>
-        <div class="tbl-wrap" style="max-height:420px">
-          <table>
-            <thead>
-              <tr>
-                <th style="text-align:left">Entry</th>
-                <th style="text-align:left">Exit</th>
-                <th>Days</th>
-                <th>Direction</th>
-                <th>Entry ₹</th>
-                <th>Exit ₹</th>
-                <th>Qty</th>
-                <th>P&amp;L ₹</th>
-                <th>Reason</th>
-              </tr>
-            </thead>
-            <tbody id="haTradeBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 
 </main>
@@ -1285,8 +658,7 @@ function chartColors() {
     bg:      _cv('--bg-alt')       || '#f8fafc',
   };
 }
-let _sortDir = {}, _sortCol = -1;
-let _activeTab   = 'home';
+let _activeTab   = 'screener';
 let _refreshTimer = null;
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
@@ -1303,31 +675,13 @@ function switchTab(name, el) {
   _activeTab = name;
   history.replaceState(null, '', '#' + name);
 
-  // KPI bar: hide on tabs that have no backtest KPI bar
-  document.getElementById('kpiBar').style.display =
-    (name === 'home' || name === 'portfolio' || name === 'screener' || name === 'options') ? 'none' : '';
-
-  if (name === 'portfolio') {
-    loadPortfolio();
-    clearTimeout(_pulseRefreshTimer);
-    clearInterval(_pulseCountdownTimer);
-  } else if (name === 'screener') {
+  if (name === 'screener') {
     loadScreener();
-    clearTimeout(_pulseRefreshTimer);
-    clearInterval(_pulseCountdownTimer);
-  } else if (name === 'options') {
-    loadOptions();
     clearTimeout(_pulseRefreshTimer);
     clearInterval(_pulseCountdownTimer);
   } else if (name === 'ha') {
     checkKiteStatus();
     loadPulseSignal();
-    if (window._haData) renderKPIsHA(window._haData);
-  } else if (name === 'minervini') {
-    _restoreKPILabels();
-    if (window._minData) renderKPIs(window._minData);
-    clearTimeout(_pulseRefreshTimer);
-    clearInterval(_pulseCountdownTimer);
   }
 }
 
@@ -1337,401 +691,12 @@ const clr  = v => v == null ? '' : v >= 0 ? 'g' : 'r';
 const fmt  = (v, d=2) => v == null ? '—' : v.toFixed(d);
 const INR  = v => v == null ? '—' : '₹' + v.toLocaleString('en-IN', {maximumFractionDigits:2});
 
-// Benchmark display name: prefer the saved label, else infer from market.
-function _benchLabel(d) {
-  const p = d.params || {};
-  return p.benchmark_label || (p.market === 'us' ? 'S&P 500' : 'Nifty 500');
-}
-
-// ── KPI bar ───────────────────────────────────────────────────────────────────
-function renderKPIs(d) {
-  const sk = d.strategy_kpi, bk = d.benchmark_kpi;
-  const yrs = d.params.years;
-  const bench = _benchLabel(d);
-
-  setText('k-cagr',   pct(sk.cagr_pct));
-  const alpha = sk.alpha_pct ?? 0;
-  setText('k-alpha',  `${alpha >= 0 ? '+' : ''}${alpha.toFixed(1)}% alpha vs ${bench}`);
-  setText('k-bcagr',  pct(bk.cagr_pct));
-  setText('k-bcagr-label', `${bench} CAGR`);
-  setText('k-bperiod',`${bench} · ${yrs}y`);
-  setText('k-sharpe', fmt(sk.sharpe));
-  setText('k-sortino',`Sortino ${fmt(sk.sortino)}`);
-  setText('k-mdd',    pct(sk.max_dd_pct, 1));
-  setText('k-calmar', `Calmar ${fmt(sk.calmar)}`);
-  setText('k-wr',     (sk.win_rate_pct ?? 0).toFixed(1) + '%');
-  setText('k-months', sk.total_months + ' months');
-  setText('k-total',  pct(sk.total_return_pct, 1));
-  const dates = d.dates || [];
-  const fromLbl = dates.length ? dates[0].slice(0, 7)              : '';
-  const toLbl   = dates.length ? dates[dates.length - 1].slice(0, 7) : '';
-  setText('k-period', fromLbl && toLbl ? `${fromLbl} → ${toLbl}` : `${yrs}-year backtest`);
-
-  const curYear = new Date().getFullYear();
-  const ytdRow  = (d.monthly_returns || []).find(r => r.year === curYear);
-  const ytd     = ytdRow ? ytdRow.Annual : null;
-  setText('k-ytd-label', `${curYear} YTD`);
-  setText('k-ytd',       pct(ytd, 1));
-  setText('k-ytd-sub',   ytd != null ? 'same across all runs' : 'run backtest first');
-  document.getElementById('k-ytd').className = 'kpi-value ' + clr(ytd);
-  setText('k-univ',     d.params.universe_size);
-  setText('k-topn',     d.params.top_n);
-  setText('k-topn-sub', 'equal-weight');
-
-  const cagr = document.getElementById('k-cagr');
-  cagr.className = 'kpi-value ' + (sk.cagr_pct >= 0 ? 'g' : 'r');
-  document.getElementById('k-mdd').closest('.kpi').className =
-    'kpi ' + (sk.max_dd_pct < -30 ? 'neg' : '');
-
-}
-
 function setText(id, v) {
   const el = document.getElementById(id);
   if (el) el.textContent = v ?? '—';
 }
 
-// ── Monthly heatmap ───────────────────────────────────────────────────────────
-function heatColor(v) {
-  if (v == null) return 'background:var(--border-inner);color:var(--border)';
-  const intensity = Math.min(Math.abs(v) / 12, 1);
-  if (v > 0)
-    return `background:rgba(22,163,74,${(intensity * 0.18 + 0.07).toFixed(2)});color:${intensity > 0.4 ? '#15803d' : '#166534'}`;
-  return `background:rgba(220,38,38,${(intensity * 0.18 + 0.07).toFixed(2)});color:${intensity > 0.4 ? '#b91c1c' : '#991b1b'}`;
-}
-
-function renderHeatmap(rows, benchRows, targetId = 'heatmapWrap') {
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const benchMap = {};
-  (benchRows || []).forEach(r => { benchMap[r.year] = r; });
-
-  let html = `<table class="heatmap-table"><thead><tr>
-    <th>Year</th>${months.map(m=>`<th>${m}</th>`).join('')}<th>Annual</th></tr></thead><tbody>`;
-
-  rows.slice().reverse().forEach(row => {
-    const bench = benchMap[row.year] || {};
-    html += `<tr><td>${row.year}</td>
-      ${months.map(m => {
-        const v = row[m], bv = bench[m];
-        const diff = (v != null && bv != null) ? (v - bv).toFixed(1) : '';
-        const tip  = diff ? ` (${diff >= 0 ? '+' : ''}${diff} vs Nifty)` : '';
-        return `<td style="${heatColor(v)}" title="${v != null ? v.toFixed(1) + '%' + tip : 'no data'}">${v != null ? v.toFixed(1) : '—'}</td>`;
-      }).join('')}
-      <td style="${heatColor(row.Annual)}">${row.Annual != null ? row.Annual.toFixed(1) : '—'}%</td>
-    </tr>`;
-  });
-  html += '</tbody></table>';
-  document.getElementById(targetId).innerHTML = html;
-}
-
-// ── Backtest ──────────────────────────────────────────────────────────────────
-// ── Portfolio ─────────────────────────────────────────────────────────────────
-let _portData = null;
-let _dayData  = null;
-let _pfMarket = 'india';
-
-function _pfMkt() { return document.getElementById('pf-market')?.value || 'india'; }
-
-// Market toggle → reload the whole Portfolio tab for the selected market.
-function onPfMarketChange() {
-  _pfMarket = _pfMkt();
-  _portData = null; _dayData = null;
-  loadPortfolio(true);
-}
-
-async function loadPortfolio(force = false) {
-  _pfMarket = _pfMkt();
-  if (_portData && !force) { renderPortfolio(_portData); return; }
-  show('portLoading'); hide('portContent'); hide('portError');
-  try {
-    const d = await fetch(API + '/api/portfolio/strategies?market=' + _pfMarket).then(r => r.json());
-    _portData = d;
-    renderPortfolio(d);
-    loadDayChange();   // fetch daily changes in background
-    loadVsIndex();     // fetch portfolio-vs-index curve in background
-  } catch(e) {
-    hide('portLoading');
-    show('portError');
-    setText('portErrorMsg', 'Failed to load: ' + e.message);
-  }
-}
-
-async function loadDayChange() {
-  // Clear stale (old-market) numbers immediately and show spinners.
-  const SP = '<span class="spin-inline"></span>';
-  ['dayN500','dayMin','mtdN500','mtdMin'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = SP; });
-  ['dayMinDiff','mtdMinDiff'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ''; });
-  setText('dayAsOf',''); setText('mtdAsOf','');
-  try {
-    const d = await fetch(API + '/api/portfolio/daily-change?market=' + _pfMarket).then(r => r.json());
-    _dayData = d;
-    renderDayChange(d);
-  } catch(_) {
-    ['dayN500','dayMin','mtdN500','mtdMin'].forEach(id => setText(id, '—'));
-  }
-}
-
-// ── Portfolio vs Index growth chart ──────────────────────────────────────────
-let _vsChart = null;
-let _vsRange = '3';   // '3' months, or 'mtd' for month-to-date
-
-async function loadVsIndex(range = _vsRange) {
-  _vsRange = range;
-  document.querySelectorAll('.vs-range').forEach(b =>
-    b.classList.toggle('active', b.dataset.r === String(range)));
-  const qs = (range === 'mtd' ? 'from_month_start=true' : 'months=' + range) + '&market=' + _pfMarket;
-  // Loading state: dim the old chart and show a spinner in the meta line.
-  const wrap = document.getElementById('vsIndexChartWrap');
-  hide('vsIndexEmpty'); show('vsIndexChartWrap');
-  if (wrap) wrap.classList.add('is-loading');
-  document.getElementById('vsIndexMeta').innerHTML = '<span class="spin-inline"></span> Loading…';
-  try {
-    const d = await fetch(API + '/api/portfolio/vs-index?' + qs).then(r => r.json());
-    if (wrap) wrap.classList.remove('is-loading');
-    renderVsIndex(d);
-  } catch(_) {
-    if (wrap) wrap.classList.remove('is-loading');
-    setText('vsIndexMeta', '');
-  }
-}
-
-function renderVsIndex(d) {
-  const empty = document.getElementById('vsIndexEmpty');
-  const wrap  = document.getElementById('vsIndexChartWrap');
-  if (!d.dates || !d.dates.length) {
-    show('vsIndexEmpty'); hide('vsIndexChartWrap');
-    setText('vsIndexMeta', '');
-    return;
-  }
-  hide('vsIndexEmpty'); show('vsIndexChartWrap');
-
-  const bench = d.benchmark_label || 'Nifty 500';
-  setText('vsIndexTitle', `📈 My Portfolio vs ${bench}`);
-  const pr = d.port_return, br = d.bench_return;
-  if (pr != null && br != null) {
-    const alpha = pr - br;
-    document.getElementById('vsIndexMeta').innerHTML =
-      `Portfolio ${pr>=0?'+':''}${pr.toFixed(1)}% · ${bench} ${br>=0?'+':''}${br.toFixed(1)}% ` +
-      `<span class="${alpha>=0?'g':'r'}">(${alpha>=0?'+':''}${alpha.toFixed(1)}%)</span>`;
-  } else {
-    setText('vsIndexMeta', '');
-  }
-
-  const ctx = document.getElementById('portVsIndexChart').getContext('2d');
-  if (_vsChart) _vsChart.destroy();
-  _vsChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: d.dates,
-      datasets: [
-        { label: 'My Portfolio', data: d.portfolio_curve, borderColor: '#f59e0b',
-          backgroundColor: 'rgba(245,158,11,.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1, spanGaps: true },
-        { label: bench, data: d.benchmark_curve, borderColor: '#94a3b8',
-          backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, borderDash: [4,3], tension: 0.1, spanGaps: true },
-      ],
-    },
-    options: {
-      responsive: true,
-      interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: true, labels: { color: chartColors().t2, boxWidth: 12, font: { size: 11 } } },
-        tooltip: {
-          backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
-          titleColor: chartColors().t1, bodyColor: chartColors().t2,
-          callbacks: { label: c => ` ${c.dataset.label}: ${c.raw == null ? '—' : (c.raw - 100 >= 0 ? '+' : '') + (c.raw - 100).toFixed(2) + '%'}` },
-        }},
-      scales: {
-        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 10 } },
-        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, callback: v => (v - 100 >= 0 ? '+' : '') + (v - 100).toFixed(0) + '%' } },
-      },
-    },
-  });
-}
-
-document.querySelectorAll('.vs-range').forEach(b =>
-  b.addEventListener('click', () => loadVsIndex(b.dataset.r)));
-
-function _pctHtml(v) {
-  if (v == null) return '<span class="d">—</span>';
-  const cls = v >= 0 ? 'g' : 'r';
-  return `<span class="${cls}">${v >= 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
-}
-
-function renderDayChange(d) {
-  const fmt = dt => new Date(dt).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
-
-  const bench = d.benchmark_label || 'Nifty 500';
-  setText('dayBenchLabel', bench);
-  setText('mtdBenchLabel', bench);
-
-  // ── Today ──────────────────────────────────────────────────────────────
-  const n500 = d.nifty500, min = d.min_portfolio;
-  document.getElementById('dayN500').innerHTML = _pctHtml(n500);
-  document.getElementById('dayMin').innerHTML  = _pctHtml(min);
-  if (d.as_of) setText('dayAsOf', fmt(d.as_of));
-  if (n500 != null && min != null) {
-    const diff = min - n500;
-    document.getElementById('dayMinDiff').innerHTML =
-      `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
-  }
-
-  // ── This Month ─────────────────────────────────────────────────────────
-  const mn500 = d.mtd_nifty500, mmin = d.mtd_min_portfolio;
-  document.getElementById('mtdN500').innerHTML = _pctHtml(mn500);
-  document.getElementById('mtdMin').innerHTML  = _pctHtml(mmin);
-  if (d.month_start_date && d.as_of)
-    setText('mtdAsOf', `${fmt(d.month_start_date)} → ${fmt(d.as_of)}`);
-  if (mn500 != null && mmin != null) {
-    const diff = mmin - mn500;
-    document.getElementById('mtdMinDiff').innerHTML =
-      `<span class="${diff>=0?'g':'r'}">(${diff>=0?'+':''}${diff.toFixed(2)}%)</span>`;
-  }
-
-  // ── Per-stock entry price, today %, month % ────────────────────────────
-  const minStocks   = d.min_stocks      || {};
-  const minMtd      = d.mtd_min_stocks  || {};
-  const entryPrices = d.entry_prices    || {};
-
-  const ccy = d.market === 'us' ? '$' : '₹';
-  const _inrHtml = v => v == null ? '<span class="d">—</span>'
-    : `<span class="sym-cell">${ccy}${v.toLocaleString('en-IN',{maximumFractionDigits:2})}</span>`;
-
-  // Trend Breakout: Symbol(0) RS(1) Price(2) Entry(3) Today(4) Month(5)
-  document.querySelectorAll('#minPortBody tr').forEach(tr => {
-    const sym = tr.dataset.sym;
-    if (!sym) return;
-    if (tr.cells[3]) tr.cells[3].innerHTML = _inrHtml(entryPrices[sym] ?? null);
-    if (tr.cells[4]) tr.cells[4].innerHTML = _pctHtml(minStocks[sym]   ?? null);
-    if (tr.cells[5]) tr.cells[5].innerHTML = _pctHtml(minMtd[sym]      ?? null);
-  });
-}
-
-function renderPortfolio(d) {
-  hide('portLoading');
-
-  if (!d.minervini) {
-    show('portError');
-    setText('portErrorMsg', 'No strategy data yet — run the Trend Breakout backtest first.');
-    return;
-  }
-
-  show('portContent');
-  setText('portLastUpd', new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'}));
-
-  const rb = d.next_rebalance;
-  if (rb) {
-    const badge = document.getElementById('portRebalBadge');
-    badge.style.display = '';
-    badge.textContent = `Next rebalance in ${rb.days_left}d · ${rb.label}`;
-  }
-
-  // ── Minervini picks ───────────────────────────────────────────────────
-  if (d.minervini && d.minervini.holdings && d.minervini.holdings.length) {
-    setText('minPortAsOf', 'as of ' + (d.minervini.as_of || ''));
-    hide('minPortEmpty'); show('minPortTable');
-    const ccy = d.market === 'us' ? '$' : '₹';
-    const tbody = document.getElementById('minPortBody');
-    tbody.innerHTML = '';
-    d.minervini.holdings.forEach(h => {
-      const rs = h.rs_rating != null ? h.rs_rating.toFixed(1) : '—';
-      tbody.innerHTML += `<tr data-sym="${h.symbol}">
-        <td class="sym-cell" style="font-weight:600">${h.symbol}</td>
-        <td><span style="font-weight:700;color:#f59e0b">${rs}</span></td>
-        <td class="sym-cell">${ccy}${(h.price||0).toLocaleString('en-IN')}</td>
-        <td class="sym-cell d">—</td>
-        <td class="d">—</td>
-        <td class="d">—</td>
-      </tr>`;
-    });
-  } else {
-    show('minPortEmpty'); hide('minPortTable');
-  }
-
-}
-
-function statCard(label, val, color) {
-  return `<div style="background:var(--bg-alt);border:1px solid var(--border);border-radius:8px;padding:12px">
-    <div style="font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">${label}</div>
-    <div style="font-size:18px;font-weight:700;color:${color}">${val}</div>
-  </div>`;
-}
-
-// ── Refresh counter ───────────────────────────────────────────────────────────
-function nextRebalanceDate() {
-  const now  = new Date();
-  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const diff = next - now;
-  const days  = Math.floor(diff / 86400000);
-  const hours = Math.floor((diff % 86400000) / 3600000);
-  return { date: next.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}), days, hours };
-}
-
-function updateRefreshUI() {
-  const rb    = nextRebalanceDate();
-  const nextIn = rb.days > 0 ? `${rb.days}d ${rb.hours}h` : `${rb.hours}h`;
-  document.getElementById('navUpdated').innerHTML =
-    `<span style="color:var(--t3)">Next rebalance: <strong style="color:var(--accent)">${rb.date}</strong> (${nextIn})</span>`;
-}
-
-function scheduleRefresh() {
-  clearInterval(_refreshTimer);
-  _refreshTimer = setInterval(() => {
-    updateRefreshUI();
-  }, 30_000);
-}
-
-document.addEventListener('visibilitychange', () => {
-  updateRefreshUI();
-});
-
-// ── HA KPIs ───────────────────────────────────────────────────────────────────
-function renderKPIsHA(d) {
-  const k = d.kpis, p = d.params;
-
-  document.querySelector('#kpiBar .kpi:nth-child(1) .kpi-label').textContent = 'Total P&L';
-  document.querySelector('#kpiBar .kpi:nth-child(2) .kpi-label').textContent = 'Win Rate';
-  document.querySelector('#kpiBar .kpi:nth-child(3) .kpi-label').textContent = 'Total Trades';
-  document.querySelector('#kpiBar .kpi:nth-child(4) .kpi-label').textContent = 'Max Drawdown';
-  document.querySelector('#kpiBar .kpi:nth-child(5) .kpi-label').textContent = 'Profit Factor';
-  document.querySelector('#kpiBar .kpi:nth-child(6) .kpi-label').textContent = 'Avg Trade';
-  document.querySelector('#kpiBar .kpi:nth-child(7) .kpi-label').textContent = 'Avg Win';
-  document.querySelector('#kpiBar .kpi:nth-child(8) .kpi-label').textContent = 'Avg Loss';
-
-  setText('k-cagr',   `₹${(k.total_pnl ?? 0).toLocaleString('en-IN')}`);
-  setText('k-alpha',  `${p.from_date} → ${p.to_date}`);
-  setText('k-bcagr',  `${k.win_rate_pct ?? '—'}%`);
-  setText('k-bperiod',`${k.total_trades} trades`);
-  setText('k-sharpe', k.total_trades ?? '—');
-  setText('k-sortino',`${p.mode} · ${p.lots} lot${p.lots > 1 ? 's' : ''}`);
-  setText('k-mdd',    `₹${Math.abs(k.max_drawdown ?? 0).toLocaleString('en-IN')}`);
-  setText('k-calmar', '');
-  setText('k-wr',     k.profit_factor ?? '—');
-  setText('k-months', k.profit_factor >= 1 ? 'profitable' : 'loss-making');
-  setText('k-total',  `₹${(k.avg_pnl ?? 0).toLocaleString('en-IN')}`);
-  setText('k-period', 'per trade');
-  setText('k-univ',   `₹${(k.avg_win ?? 0).toLocaleString('en-IN')}`);
-  setText('k-topn',   `₹${(k.avg_loss ?? 0).toLocaleString('en-IN')}`);
-  setText('k-topn-sub', 'avg loss');
-
-  document.getElementById('k-cagr').className = 'kpi-value ' + (k.total_pnl >= 0 ? 'g' : 'r');
-
-}
-
-function _restoreKPILabels() {
-  const labels = ['Strategy CAGR','Nifty 500 CAGR','Sharpe Ratio','Max Drawdown',
-                  'Win Rate','Total Return','Universe','Portfolio'];
-  document.querySelectorAll('#kpiBar .kpi-label').forEach((el, i) => {
-    if (labels[i]) el.textContent = labels[i];
-  });
-}
-
-// ── HA Strategy ───────────────────────────────────────────────────────────────
-let _haChart = null;
-
-function toggleHAMode() {
-  const mode = document.getElementById('ha-mode').value;
-  document.getElementById('ha-sl-pts-wrap').classList.toggle('hidden', mode !== 'futures');
-  document.getElementById('ha-sl-pct-wrap').classList.toggle('hidden', mode === 'futures');
-}
-
+// ── Kite status ───────────────────────────────────────────────────────────────
 async function checkKiteStatus() {
   try {
     const s = await fetch(API + '/api/kite/status').then(r => r.json());
@@ -1745,163 +710,6 @@ async function checkKiteStatus() {
       btn.classList.remove('hidden');
     }
   } catch(_) {}
-}
-
-async function runHA() {
-  const fromDate = document.getElementById('ha-from').value;
-  const toDate   = document.getElementById('ha-to').value;
-  const mode     = document.getElementById('ha-mode').value;
-  const slPts    = +document.getElementById('ha-sl-pts').value;
-  const slPct    = +document.getElementById('ha-sl-pct').value / 100;
-  const lots     = +document.getElementById('ha-lots').value;
-
-  document.getElementById('btnHA').disabled = true;
-  document.getElementById('haStatus').classList.remove('hidden');
-  document.getElementById('haStatus').style.display = 'flex';
-  document.getElementById('haEmpty').classList.add('hidden');
-  document.getElementById('haResults').classList.add('hidden');
-
-  try {
-    const res = await fetch(API + '/api/ha/backtest/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from_date: fromDate, to_date: toDate,
-                             mode, sl_pts: slPts, sl_pct: slPct, lots }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    renderHA(await res.json());
-  } catch(e) {
-    document.getElementById('haStatusMsg').textContent = 'Error: ' + e.message;
-  } finally {
-    document.getElementById('btnHA').disabled = false;
-    document.getElementById('haStatus').style.display = 'none';
-  }
-}
-
-function renderHA(d) {
-  window._haData = d;
-  document.getElementById('haEmpty').classList.add('hidden');
-  document.getElementById('haResults').classList.remove('hidden');
-  if (_activeTab === 'ha') renderKPIsHA(d);
-  if (d.equity_curve?.length) drawSparkline('spark-ha', d.equity_curve.map(v => 1 + v / Math.abs(d.equity_curve[d.equity_curve.length-1] || 1)));
-
-  const k = d.kpis;
-  const pnlColor = k.total_pnl >= 0 ? '#16a34a' : '#dc2626';
-  document.getElementById('haKpiGrid').innerHTML = [
-    ['Total P&L',     `₹${k.total_pnl?.toLocaleString('en-IN') ?? '—'}`, pnlColor],
-    ['Win Rate',      `${k.win_rate_pct ?? '—'}%`, k.win_rate_pct >= 50 ? '#16a34a' : '#dc2626'],
-    ['Trades',        k.total_trades ?? '—', '#6366f1'],
-    ['Avg Trade',     `₹${k.avg_pnl?.toLocaleString('en-IN') ?? '—'}`, k.avg_pnl >= 0 ? '#16a34a' : '#dc2626'],
-    ['Profit Factor', k.profit_factor ?? '—', k.profit_factor >= 1 ? '#16a34a' : '#dc2626'],
-    ['Max Drawdown',  `₹${Math.abs(k.max_drawdown ?? 0).toLocaleString('en-IN')}`, '#dc2626'],
-  ].map(([label, val, color]) => `
-    <div style="background:var(--bg-alt);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">${label}</div>
-      <div style="font-size:20px;font-weight:700;color:${color};line-height:1">${val}</div>
-    </div>`).join('');
-
-  // Equity curve
-  const ctx = document.getElementById('haEquityChart').getContext('2d');
-  if (_haChart) _haChart.destroy();
-  _haChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: d.trades.map(t => t.exit_date),
-      datasets: [{ label: 'Cumulative P&L', data: d.equity_curve,
-        borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,.08)',
-        borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1 }],
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
-        titleColor: chartColors().t1, bodyColor: chartColors().t2,
-        callbacks: { label: c => ` ₹${c.raw.toLocaleString('en-IN')}` },
-      }},
-      scales: {
-        x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 12 } },
-        y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick,
-          callback: v => '₹' + v.toLocaleString('en-IN') } },
-      },
-    },
-  });
-
-  // Monthly heatmap
-  (function() {
-    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const monthly = {};
-    d.trades.forEach(t => {
-      const dt = t.exit_date || '';
-      const [y, m] = dt.split('-');
-      if (!y || !m) return;
-      const key = `${y}-${m}`;
-      monthly[key] = (monthly[key] || 0) + t.pnl;
-    });
-    const years  = [...new Set(Object.keys(monthly).map(k => k.split('-')[0]))].sort();
-    const allVals = Object.values(monthly).filter(v => v !== 0);
-    const maxAbs  = allVals.length ? Math.max(...allVals.map(Math.abs)) : 1;
-
-    const cellStyle = val => {
-      if (val === undefined || val === null) return 'background:var(--bg-alt);color:var(--border)';
-      const intensity = Math.min(Math.abs(val) / maxAbs, 1);
-      return val > 0
-        ? `background:rgba(22,163,74,${(0.12 + intensity * 0.55).toFixed(2)});color:#14532d`
-        : `background:rgba(220,38,38,${(0.12 + intensity * 0.55).toFixed(2)});color:#7f1d1d`;
-    };
-
-    let html = `<table style="border-collapse:collapse;width:100%;font-size:12px">
-      <thead><tr>
-        <th style="padding:6px 10px;text-align:left;color:var(--t3);font-weight:600;white-space:nowrap">Year</th>
-        ${MONTHS.map(m => `<th style="padding:6px 8px;text-align:center;color:var(--t3);font-weight:600;min-width:64px">${m}</th>`).join('')}
-        <th style="padding:6px 10px;text-align:center;color:var(--t3);font-weight:600">Total</th>
-      </tr></thead><tbody>`;
-
-    years.forEach(yr => {
-      let yearTotal = 0;
-      const cells = MONTHS.map((_, mi) => {
-        const key = `${yr}-${String(mi + 1).padStart(2, '0')}`;
-        const val = monthly[key];
-        if (val !== undefined) yearTotal += val;
-        const label = val !== undefined
-          ? (val >= 0 ? '+' : '') + '₹' + Math.round(val).toLocaleString('en-IN') : '—';
-        return `<td style="padding:6px 8px;text-align:center;border-radius:6px;${cellStyle(val)};font-weight:600">${label}</td>`;
-      });
-      const ts = cellStyle(yearTotal);
-      html += `<tr>
-        <td style="padding:6px 10px;font-weight:700;color:var(--t1);white-space:nowrap">${yr}</td>
-        ${cells.join('')}
-        <td style="padding:6px 10px;text-align:center;border-radius:6px;${ts};font-weight:700">
-          ${(yearTotal >= 0 ? '+' : '') + '₹' + Math.round(yearTotal).toLocaleString('en-IN')}
-        </td></tr>`;
-    });
-    html += '</tbody></table>';
-    document.getElementById('haHeatmap').innerHTML = html;
-  })();
-
-  // Trade table
-  document.getElementById('haTradeCount').textContent =
-    `${d.trades.length} trades · ${d.params.from_date} → ${d.params.to_date}`;
-  const _dtCell = s => {
-    const [date, time] = (s || '').split(' ');
-    return `<td style="text-align:left;line-height:1.3">
-      <span style="display:block;font-weight:600;color:var(--t1)">${date || s}</span>
-      ${time ? `<span style="display:block;font-size:11px;color:var(--t3)">${time}</span>` : ''}
-    </td>`;
-  };
-  document.getElementById('haTradeBody').innerHTML = d.trades.slice().reverse().map(t => {
-    const cls = t.pnl >= 0 ? 'g' : 'r';
-    return `<tr>
-      ${_dtCell(t.entry_date)}
-      ${_dtCell(t.exit_date)}
-      <td>${t.days_held}</td>
-      <td>${t.direction}</td>
-      <td>${t.entry_price?.toLocaleString('en-IN')}</td>
-      <td>${t.exit_price?.toLocaleString('en-IN')}</td>
-      <td>${t.qty}</td>
-      <td class="${cls}"><strong>${t.pnl >= 0 ? '+' : ''}₹${t.pnl?.toLocaleString('en-IN')}</strong></td>
-      <td style="color:var(--t3)">${t.exit_reason}</td>
-    </tr>`;
-  }).join('');
 }
 
 // ── Pulse live signal ─────────────────────────────────────────────────────────
@@ -2244,418 +1052,34 @@ async function loadAutoLog() {
   } catch(_) {}
 }
 
-// ── Order execution ───────────────────────────────────────────────────────────
-
-function _updatePerStockLabel(strategy) {
-  const cap  = +document.getElementById('min-capital').value || 0;
-  const n    = +document.getElementById('mv-topn').value || 20;
-  const per  = cap / n;
-  document.getElementById('min-per-stock-label').textContent =
-    `₹${Math.round(per).toLocaleString('en-IN')} per stock (${n} stocks)`;
-}
-
-function _getRebalanceLog(strategy) {
-  const log = window._minLog;
-  return log && log.length ? log[0] : null;  // log[0] is already latest (reversed)
-}
-
-function _renderOrderRows(orders, containerId) {
-  document.getElementById(containerId).innerHTML = orders.map(o => {
-    const badge = `<span class="order-badge ${o.action.toLowerCase()}">${o.action}</span>`;
-    const amt   = o.estimated_amount ? `₹${o.estimated_amount.toLocaleString('en-IN')}` : '—';
-    const note  = o.note ? `<span style="color:var(--t3);font-size:11px">${o.note}</span>` : '';
-    return `<div class="trade-order-row">
-      ${badge}
-      <span style="font-weight:700;color:var(--t1);width:120px">${o.symbol}</span>
-      <span style="color:var(--t2)">Qty: <strong>${o.quantity}</strong></span>
-      <span style="color:var(--t2)">@ ₹${(o.price||0).toLocaleString('en-IN')}</span>
-      <span style="margin-left:auto;font-weight:600">${amt}</span>
-      ${note}
-    </div>`;
-  }).join('');
-}
-
-function _renderResultRows(results, containerId) {
-  document.getElementById(containerId).innerHTML = results.map(r => {
-    const badge = `<span class="order-badge ${r.action.toLowerCase()}">${r.action}</span>`;
-    const status = `<span class="order-status ${r.status}">${r.status.toUpperCase()}</span>`;
-    const detail = r.order_id ? `Order #${r.order_id}` : (r.error || r.note || '');
-    return `<div class="trade-order-row">
-      ${badge}
-      <span style="font-weight:700;color:var(--t1);width:120px">${r.symbol}</span>
-      <span style="color:var(--t2)">Qty: <strong>${r.quantity}</strong></span>
-      ${status}
-      <span style="font-size:11px;color:var(--t3);margin-left:auto">${detail}</span>
-    </div>`;
-  }).join('');
-}
-
-function _tradeParams(strategy) {
-  const pfx    = 'min';
-  const mode   = document.getElementById(`${pfx}-trade-mode`).value;
-  const cap    = +document.getElementById(`${pfx}-capital`).value;
-  const stocks = +document.getElementById('mv-topn').value || 20;
-  const r = _getRebalanceLog(strategy);
-  if (!r) return null;
-
-  const to_buy  = mode === 'fresh' ? r.holdings : r.added;
-  const to_sell = mode === 'fresh' ? [] : r.removed;
-  return { to_buy, to_sell, capital_per_stock: cap / stocks, mode, r, pfx };
-}
-
-async function previewOrders(strategy) {
-  const p = _tradeParams(strategy);
-  if (!p) { alert('Run a backtest first to generate a rebalance log.'); return; }
-
-  const pfx      = p.pfx;
-  const statusEl = document.getElementById(`${pfx}TradeStatus`);
-  statusEl.textContent = 'Fetching prices…';
-
-  try {
-    const res = await fetch(API + '/api/orders/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to_buy: p.to_buy, to_sell: p.to_sell, capital_per_stock: p.capital_per_stock }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-
-    _renderOrderRows(data.orders, `${pfx}OrderRows`);
-
-    const s = data.summary;
-    document.getElementById(`${pfx}OrderSummary`).innerHTML =
-      `Buy: <strong>₹${s.total_buy.toLocaleString('en-IN')}</strong> &nbsp;·&nbsp;
-       Sell: <strong>₹${s.total_sell.toLocaleString('en-IN')}</strong> &nbsp;·&nbsp;
-       Net outflow: <strong style="color:${s.net_outflow >= 0 ? '#dc2626' : '#16a34a'}">
-         ₹${Math.abs(s.net_outflow).toLocaleString('en-IN')} ${s.net_outflow >= 0 ? 'out' : 'in'}
-       </strong>`;
-
-    document.getElementById(`${pfx}OrderPreview`).classList.remove('hidden');
-    document.getElementById(`${pfx}OrderResults`).classList.add('hidden');
-    statusEl.textContent = `${data.orders.length} orders · ${p.mode === 'fresh' ? 'fresh start' : 'rebalance'} · ${p.r.date}`;
-  } catch(e) {
-    statusEl.textContent = 'Error: ' + e.message;
-  }
-}
-
-async function executeOrders(strategy) {
-  const confirmed = confirm(
-    '⚠️ This will place real market orders on Kite immediately.\n\n' +
-    'Make sure:\n• Market is open (9:15 AM – 3:30 PM)\n• Kite is connected\n• You have sufficient funds\n\n' +
-    'Proceed?'
-  );
-  if (!confirmed) return;
-
-  const p = _tradeParams(strategy);
-  if (!p) return;
-
-  const pfx      = p.pfx;
-  const execBtn  = document.getElementById(`${pfx}ExecBtn`);
-  const statusEl = document.getElementById(`${pfx}TradeStatus`);
-  execBtn.disabled = true;
-  statusEl.textContent = 'Placing orders…';
-
-  try {
-    const res = await fetch(API + '/api/orders/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to_buy: p.to_buy, to_sell: p.to_sell, capital_per_stock: p.capital_per_stock,
-                             strategy: 'minervini', mode: p.mode }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-
-    _renderResultRows(data.results, `${pfx}ResultRows`);
-    const s = data.summary;
-    document.getElementById(`${pfx}ResultSummary`).innerHTML =
-      `<span style="color:var(--green)">✓ ${s.placed} placed</span> &nbsp;·&nbsp;
-       <span style="color:var(--red)">✗ ${s.failed} failed</span> &nbsp;·&nbsp;
-       <span style="color:var(--t3)">${s.skipped} skipped</span>`;
-
-    // Show retry button if any orders failed
-    const retryBtn = document.getElementById(`${pfx}RetryBtn`);
-    const failed   = data.results.filter(r => r.status === 'failed');
-    if (retryBtn) {
-      if (failed.length > 0) {
-        retryBtn.classList.remove('hidden');
-        retryBtn.textContent = `↻ Retry ${failed.length} Failed`;
-        // Store failed symbols keyed by strategy prefix for retryFailedOrders()
-        window[`_${pfx}FailedResults`] = { failed, capital_per_stock: p.capital_per_stock };
-      } else {
-        retryBtn.classList.add('hidden');
-      }
-    }
-
-    document.getElementById(`${pfx}OrderPreview`).classList.add('hidden');
-    document.getElementById(`${pfx}OrderResults`).classList.remove('hidden');
-    statusEl.textContent = 'Done';
-    const s2 = data.summary;
-    showToast(`${s2.placed} orders placed · ${s2.failed} failed · ${s2.skipped} skipped`,
-      s2.failed > 0 ? 'error' : 'success');
-  } catch(e) {
-    statusEl.textContent = 'Error: ' + e.message;
-    showToast('Order execution failed: ' + e.message, 'error');
-  } finally {
-    execBtn.disabled = false;
-  }
-}
-
-async function retryFailedOrders(strategy) {
-  const pfx   = strategy === 'min' ? 'min' : 'mom';
-  const state = window[`_${pfx}FailedResults`];
-  if (!state || !state.failed.length) return;
-
-  const failed = state.failed;
-  const to_buy  = failed.filter(r => r.action === 'BUY').map(r => r.symbol);
-  const to_sell = failed.filter(r => r.action === 'SELL').map(r => r.symbol);
-
-  const ok = confirm(
-    `Retry ${failed.length} failed order${failed.length > 1 ? 's' : ''}?\n\n` +
-    failed.map(r => `${r.action}  ${r.symbol}  qty ${r.quantity}`).join('\n') +
-    `\n\nReal orders will be placed immediately.`
-  );
-  if (!ok) return;
-
-  const retryBtn = document.getElementById(`${pfx}RetryBtn`);
-  const statusEl = document.getElementById(`${pfx}TradeStatus`);
-  if (retryBtn) { retryBtn.disabled = true; retryBtn.textContent = 'Retrying…'; }
-  if (statusEl)   statusEl.textContent = 'Retrying failed orders…';
-
-  try {
-    const res = await fetch(API + '/api/orders/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to_buy, to_sell, capital_per_stock: state.capital_per_stock }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-
-    _renderResultRows(data.results, `${pfx}ResultRows`);
-    const s = data.summary;
-    document.getElementById(`${pfx}ResultSummary`).innerHTML =
-      `<span style="color:var(--green)">✓ ${s.placed} placed</span> &nbsp;·&nbsp;
-       <span style="color:var(--red)">✗ ${s.failed} failed</span> &nbsp;·&nbsp;
-       <span style="color:var(--t3)">${s.skipped} skipped</span>`;
-
-    const stillFailed = data.results.filter(r => r.status === 'failed');
-    if (retryBtn) {
-      if (stillFailed.length > 0) {
-        retryBtn.disabled = false;
-        retryBtn.textContent = `↻ Retry ${stillFailed.length} Failed`;
-        window[`_${pfx}FailedResults`] = { failed: stillFailed, capital_per_stock: state.capital_per_stock };
-      } else {
-        retryBtn.classList.add('hidden');
-        window[`_${pfx}FailedResults`] = null;
-      }
-    }
-
-    if (statusEl) statusEl.textContent = 'Retry done';
-    showToast(`Retry: ${s.placed} placed · ${s.failed} failed`, s.failed > 0 ? 'error' : 'success');
-  } catch(e) {
-    if (retryBtn) { retryBtn.disabled = false; retryBtn.textContent = `↻ Retry ${failed.length} Failed`; }
-    if (statusEl) statusEl.textContent = 'Retry error: ' + e.message;
-    showToast('Retry failed: ' + e.message, 'error');
-  }
-}
-
-// ── Minervini ─────────────────────────────────────────────────────────────────
-let _minChart = null;
-let _minData  = null;
-let _screenData = [];
-
-function _mvMarket() {
-  return document.getElementById('mv-market')?.value || 'india';
-}
-
-// Switch market → show that market's cached result (or the empty state).
-async function onMarketChange() {
-  const market = _mvMarket();
-  hide('minResults'); show('minEmpty');
-  _minData = null; window._minData = null;
-  try {
-    const res = await fetch(API + '/api/minervini/backtest/result?market=' + market);
-    if (res.ok) {
-      renderMinervini(await res.json());
-    } else if (res.status === 404) {
-      showToast(`No ${market === 'us' ? 'US' : 'India'} backtest yet — click Run Backtest`, 'info');
-    } else {
-      showToast('Failed to load result: ' + (await res.text()), 'error');
-    }
-  } catch(e) {
-    showToast('Failed to load result: ' + e.message, 'error');
-  }
-}
-
-async function runMinervini() {
-  const years   = +document.getElementById('mv-years').value;
-  const topn    = +document.getElementById('mv-topn').value;
-  const costBps = +document.getElementById('mv-cost').value;
-  const market  = _mvMarket();
-
-  document.getElementById('btnMin').disabled = true;
-  const statusEl = document.getElementById('minStatus');
-  statusEl.classList.remove('hidden');
-  statusEl.style.display = 'flex';
-  // Show a loading placeholder in the body (don't leave it blank during the
-  // 1–4 min download). minEmpty doubles as the loading panel.
-  hide('minResults');
-  const emptyEl = document.getElementById('minEmpty');
-  const eTitle = emptyEl.querySelector('.empty-title');
-  const eSub   = emptyEl.querySelector('.empty-sub');
-  const _origTitle = eTitle.textContent, _origSub = eSub.innerHTML;
-  eTitle.textContent = `Running ${market === 'us' ? 'S&P 500' : 'Nifty'} backtest…`;
-  eSub.innerHTML = 'Downloading data and running the walk-forward simulation. This can take 1–4 min for large universes.';
-  show('minEmpty');
-  const _restoreEmpty = () => { eTitle.textContent = _origTitle; eSub.innerHTML = _origSub; };
-
-  const progEl = document.getElementById('minProgress');
-  const msgEl  = document.getElementById('minStatusMsg');
-
-  const poll = setInterval(async () => {
-    try {
-      const s = await fetch(API + '/api/minervini/backtest/status?market=' + market).then(r => r.json());
-      if (s.progress?.total) {
-        progEl.style.width = Math.round(s.progress.step / s.progress.total * 100) + '%';
-        msgEl.textContent  = s.progress.msg || 'Running…';
-      }
-    } catch(_) {}
-  }, 3000);
-
-  try {
-    const res = await fetch(API + '/api/minervini/backtest/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ years, top_n: topn, cost_bps: costBps, market }),
-    });
-    clearInterval(poll);
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    renderMinervini(data);
-    const mlabel = market === 'us' ? 'S&P 500' : 'Nifty';
-    showToast(`Trend Breakout backtest complete · ${mlabel} · ${years}y`, 'success');
-  } catch(e) {
-    clearInterval(poll);
-    msgEl.textContent = 'Error: ' + e.message;
-    showToast('Trend Breakout backtest failed: ' + e.message, 'error');
-  } finally {
-    _restoreEmpty();
-    document.getElementById('btnMin').disabled = false;
-    statusEl.style.display = 'none';
-  }
-}
-
-function renderMinervini(d) {
-  _minData = d;
-  window._minData = d;
-  hide('minEmpty');
-  show('minResults');
-
-  const bench = _benchLabel(d);
-  const ccy   = d.params?.market === 'us' ? '$1' : '₹1';
-  setText('minGrowthTitle', `Portfolio Growth (${ccy} invested)`);
-  setText('minGrowthLegendBench', bench);
-  setText('minHeatTitle', `Monthly Returns Heatmap — Strategy vs ${bench}`);
-
-  try { if (_activeTab === 'minervini') renderKPIs(d); } catch(e) { console.error('renderKPIs', e); }
-
-  // Growth chart
-  try {
-    const ctx = document.getElementById('minGrowthChart').getContext('2d');
-    if (_minChart) _minChart.destroy();
-    _minChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: d.dates,
-        datasets: [
-          { label: 'Trend Breakout', data: d.strategy_curve, borderColor: '#6366f1',
-            backgroundColor: 'rgba(99,102,241,.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1 },
-          { label: _benchLabel(d), data: d.benchmark_curve, borderColor: '#94a3b8',
-            backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, borderDash: [4,3], tension: 0.1 },
-        ],
-      },
-      options: {
-        responsive: true,
-        interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { display: false }, tooltip: {
-          backgroundColor: chartColors().surface, borderColor: chartColors().border, borderWidth: 1,
-          titleColor: chartColors().t1, bodyColor: chartColors().t2,
-          callbacks: { label: c => ` ${c.dataset.label}: ${c.raw == null ? '—' : c.raw.toFixed(2)+'x'}` },
-        }},
-        scales: {
-          x: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, maxTicksLimit: 12 } },
-          y: { grid: { color: chartColors().grid }, ticks: { color: chartColors().tick, callback: v => v.toFixed(1)+'x' } },
-        },
-      },
-    });
-  } catch(e) { console.error('growth chart', e); }
-
-  try { renderHeatmap(d.monthly_returns, d.monthly_bench, 'minHeatmapWrap'); } catch(e) { console.error('heatmap', e); }
-  try { renderMinHistory(d); } catch(e) { console.error('history', e); }
-  try { drawSparkline('spark-min', d.strategy_curve); } catch(e) { console.error('sparkline', e); }
-}
-
-function renderMinHistory(d) {
-  const log = (d.rebalance_history || []).filter(r => r.holdings?.length).slice().reverse();
-  if (!log.length) return;
-
-  document.getElementById('minHistMeta').textContent =
-    `${log.length} rebalances · avg ${(log.reduce((s,r)=>s+r.qualifying,0)/log.length).toFixed(0)} qualifying stocks/month`;
-
-  document.getElementById('minHistList').innerHTML = log.map((r, i) => {
-    const ret = r.period_ret_pct;
-    const cls = ret == null ? 'd' : ret >= 0 ? 'g' : 'r';
-    const retStr = ret == null ? '—' : (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%';
-    return `<div class="reblog-item" style="cursor:pointer" onclick="showMinDetail(${i})">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div class="reblog-date">${r.date}</div>
-        <div class="${cls}" style="font-weight:700;font-size:12px">${retStr}</div>
-      </div>
-      <div style="font-size:11px;color:var(--t3)">${r.qualifying} qualifying · ${r.holdings.length} held</div>
-    </div>`;
-  }).join('');
-  window._minLog = log;
-  if (log.length) showMinDetail(0);
-}
-
-function showMinDetail(i) {
-  const r = window._minLog?.[i];
-  if (!r) return;
-  document.querySelectorAll('#minHistList .reblog-item').forEach((el, j) => {
-    el.style.background = j === i ? 'var(--border-inner)' : '';
-  });
-  const detail = document.getElementById('minHistDetail');
-  const alpha = r.period_ret_pct - (r.bench_ret_pct ?? 0);
-  detail.innerHTML = `
-    <div style="padding:16px">
-      <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:4px">${r.date}</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-        ${statCard('Return', pct(r.period_ret_pct), r.period_ret_pct >= 0 ? '#16a34a' : '#dc2626')}
-        ${statCard('Alpha', pct(alpha,1), alpha >= 0 ? '#16a34a' : '#dc2626')}
-        ${statCard('Turnover', r.turnover_pct + '%', '#64748b')}
-      </div>
-      ${r.added?.length ? `
-        <div style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">In (${r.added.length})</div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">${r.added.map(t => `<span class="chip chip-add">${t.replace('.NS','')}</span>`).join('')}</div>
-        </div>` : ''}
-      ${r.removed?.length ? `
-        <div style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">Out (${r.removed.length})</div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">${r.removed.map(t => `<span class="chip chip-rem">${t.replace('.NS','')}</span>`).join('')}</div>
-        </div>` : ''}
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">Holdings (${r.holdings.length})</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          ${r.holdings.map(t => `<span class="chip chip-hold">${t.replace('.NS','')}</span>`).join('')}
-        </div>
-      </div>
-    </div>`;
-}
-
 // ── Screener ──────────────────────────────────────────────────────────────────
+let _scrSortCol = null;   // 'rs' | 'mcap' | null (null = default server order)
+let _scrSortDir = 'desc'; // 'asc' | 'desc'
+
+function setScrSort(col) {
+  if (_scrSortCol === col) {
+    _scrSortDir = _scrSortDir === 'desc' ? 'asc' : 'desc';
+  } else {
+    _scrSortCol = col;
+    _scrSortDir = 'desc';
+  }
+  renderScreen();
+}
+
+function applyMcapFilter() { renderScreen(); }
+function clearMcapFilter() {
+  const elMin = document.getElementById('scrMcapMin');
+  const elMax = document.getElementById('scrMcapMax');
+  if (elMin) elMin.value = '';
+  if (elMax) elMax.value = '';
+  renderScreen();
+}
+
 let _scrMarket = 'india';
 let _scrLoaded = null;       // market currently loaded into _screenData
 let _scrLoading = false;
+let _screenData = [];
+let _scrMeta = {};           // last screener response (for universe/missing counts)
 function _scrMkt() { return document.getElementById('scr-market')?.value || 'india'; }
 
 function onScrMarketChange() { loadScreener(); }
@@ -2675,6 +1099,7 @@ async function loadScreener(fresh = false) {
       .then(r => r.json());
     hide('screenLoading');
     _screenData = d.rows || [];
+    _scrMeta = d;
     _scrLoaded = _screenData.length ? _scrMarket : null;
     setText('screenPriceHdr', 'Price ' + (_scrMarket === 'us' ? '$' : '₹'));
     setText('screenAsOf', d.as_of ? `as of ${d.as_of}${fresh ? ' · live' : ''}` : '');
@@ -2689,18 +1114,119 @@ async function loadScreener(fresh = false) {
   }
 }
 
+function downloadScreenerCSV() {
+  if (!_screenData.length) { alert('No screener data — load the screen first.'); return; }
+  const ccy = _scrMarket === 'us' ? 'USD' : 'INR';
+  const criteriaKeys = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10'];
+  const headers = [
+    'Symbol','Name',`Price (${ccy})`,'RS Rating',
+    'EMA 9','EMA 21','SMA 50','SMA 150','SMA 200',
+    '52w High','52w Low','% from 52w High','% above 52w Low',
+    'Criteria Pass','SEPA Pass (10/10)',
+    'P>150','P>200','150>200','200↑','50>150','50>200','P>50','<25%H','>30%L','RS≥70',
+  ];
+  const esc = v => {
+    if (v == null) return '';
+    const s = String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g,'""')}"` : s;
+  };
+  const lines = [headers.map(esc).join(',')];
+  for (const r of _screenData) {
+    const c = r.criteria || {};
+    lines.push([
+      r.symbol, r.name, r.price, r.rs_rating,
+      r.ema9, r.ema21, r.sma50, r.sma150, r.sma200,
+      r.high52w, r.low52w, r.pct_from_52h, r.pct_above_52l,
+      r.passing, r.sepa_pass ? 'Yes' : 'No',
+      ...criteriaKeys.map(k => c[k] ? 'Yes' : 'No'),
+    ].map(esc).join(','));
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = (_scrMeta.as_of || new Date().toISOString().slice(0,10));
+  a.href     = url;
+  a.download = `screener_${_scrMarket}_${date}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function renderScreen() {
   if (!_screenData.length) { show('screenEmpty'); hide('screenResults'); hide('screenLoading'); return; }
 
-  const rows = _screenData;
+  // MCap filter (India only)
+  const isIndia = _scrMarket === 'india';
+  const elMin = document.getElementById('scrMcapMin');
+  const elMax = document.getElementById('scrMcapMax');
+  const mcapMin = isIndia && elMin ? (parseFloat(elMin.value) || 0) : 0;
+  const mcapMax = isIndia && elMax ? (parseFloat(elMax.value) || Infinity) : Infinity;
+  const filterActive = isIndia && (mcapMin > 0 || mcapMax < Infinity) && mcapMin <= mcapMax;
+
+  const vis = v => { const el = document.getElementById(v); if (el) el.style.display = isIndia ? '' : 'none'; };
+  vis('scrMcapGroup'); vis('scrMcapSep1'); vis('scrMcapSep2');
+  const mcapHdr = document.getElementById('screenMcapHdr');
+  if (mcapHdr) mcapHdr.style.display = isIndia ? '' : 'none';
+
+  const rows = _screenData.filter(r => {
+    if (!isIndia || mcapMin > mcapMax) return true;   // invalid range → show all
+    const mc = r.market_cap;
+    if (mc == null) return true;   // no MCap data → don't hide
+    return mc >= mcapMin && mc <= mcapMax;
+  });
+
+  // Apply sort
+  const sortedRows = [...rows];
+  if (_scrSortCol === 'rs') {
+    sortedRows.sort((a, b) => {
+      const av = a.rs_rating ?? -1, bv = b.rs_rating ?? -1;
+      return _scrSortDir === 'desc' ? bv - av : av - bv;
+    });
+  } else if (_scrSortCol === 'mcap') {
+    sortedRows.sort((a, b) => {
+      const av = a.market_cap ?? (_scrSortDir === 'desc' ? -1 : Infinity);
+      const bv = b.market_cap ?? (_scrSortDir === 'desc' ? -1 : Infinity);
+      return _scrSortDir === 'desc' ? bv - av : av - bv;
+    });
+  }
+
+  // Update sort indicators on headers
+  ['screenMcapHdr'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove('sort-asc','sort-desc'); }
+  });
+  document.querySelectorAll('#screenTable thead th').forEach(th => th.classList.remove('sort-asc','sort-desc'));
+  if (_scrSortCol) {
+    const hdrId = _scrSortCol === 'mcap' ? 'screenMcapHdr' : null;
+    if (hdrId) {
+      const el = document.getElementById(hdrId);
+      if (el) el.classList.add(_scrSortDir === 'desc' ? 'sort-desc' : 'sort-asc');
+    } else {
+      // RS is the last th — find it by position
+      const ths = document.querySelectorAll('#screenTable thead th');
+      const rsHdr = ths[ths.length - 1];
+      if (rsHdr) rsHdr.classList.add(_scrSortDir === 'desc' ? 'sort-desc' : 'sort-asc');
+    }
+  }
+
+  const miss = _scrMeta.missing_count || 0;
+  const missNote = miss > 0 ? ` · ⚠ ${miss} not downloaded (try Refresh live)` : '';
+  const filtered = rows.length !== _screenData.length ? ` · ${rows.length} shown` : '';
   document.getElementById('screenCount').textContent =
-    `${rows.length} stocks · ${_screenData.filter(r=>r.sepa_pass).length} full pass (10/10)`;
+    `${_screenData.length} stocks · ${_screenData.filter(r=>r.sepa_pass).length} full pass (10/10)${filtered}${missNote}`;
 
   hide('screenEmpty'); hide('screenLoading');
   show('screenResults');
   const ccy = _scrMarket === 'us' ? '$' : '₹';
 
   const fmtP = v => v == null ? '—' : ccy + v.toLocaleString('en-IN', {maximumFractionDigits:2});
+  const fmtMcap = v => {
+    if (v == null) return '—';
+    if (v >= 100000) return (v / 100000).toFixed(1) + 'L Cr';
+    if (v >= 1000)   return (v / 1000).toFixed(2) + 'K Cr';
+    return v.toFixed(0) + ' Cr';
+  };
   const logoUrl = sym => _scrMarket === 'us'
     ? `https://logos.stockanalysis.com/${sym.toLowerCase()}.svg`
     : `https://assets.parqet.com/logos/symbol/${encodeURIComponent(sym)}.NS`;
@@ -2713,7 +1239,7 @@ function renderScreen() {
     return `<td class="ma-cell">${fmtP(ma)}</td><td class="${v >= 0 ? 'var-pos' : 'var-neg'}">${txt}</td>`;
   };
 
-  document.getElementById('screenBody').innerHTML = rows.map((r) => {
+  document.getElementById('screenBody').innerHTML = sortedRows.map((r) => {
     const above50  = r.sma50  != null && r.price > r.sma50;
     const above200 = r.sma200 != null && r.price > r.sma200;
     let trend = 'Hold', tcls = 'trend-hold';
@@ -2725,11 +1251,16 @@ function renderScreen() {
            onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
       <span class="logo-mono" style="display:none">${(r.symbol||'?').slice(0,2)}</span></span>`;
 
+    const mcapCell = isIndia
+      ? `<td style="font-size:11px;color:var(--t3)">${fmtMcap(r.market_cap)}</td>`
+      : '';
+
     return `<tr>
       <td><div style="display:flex;align-items:center">${logo}
         <div><div style="font-weight:700">${r.symbol}</div>
         <div style="font-size:10px;color:var(--t3)">${r.name || ''}</div></div></div></td>
       <td class="ma-cell" style="font-weight:700">${fmtP(r.price)}</td>
+      ${mcapCell}
       <td><span class="trend-badge ${tcls}">${trend}</span></td>
       ${maCell(r.price, r.ema9)}
       ${maCell(r.price, r.ema21)}
@@ -2740,185 +1271,7 @@ function renderScreen() {
   }).join('');
 }
 
-// ── Sell Options (weekly strike suggester) ──────────────────────────────────────
-async function loadOptions() {
-  ['optConnect','optContent','optError'].forEach(hide);
-  show('optLoading');
-  setText('optAsOf', '');
-  const u = document.getElementById('opt-underlying')?.value || 'NIFTY';
-  const r = document.getElementById('opt-risk')?.value || 'balanced';
-  loadOptionPositions();   // refresh open-position health in parallel
-  try {
-    const d = await fetch(API + `/api/options/weekly?underlying=${u}&risk=${r}`).then(x => x.json());
-    hide('optLoading');
-    if (!d.connected) { show('optConnect'); return; }
-    if (d.error)      { show('optError'); setText('optErrorMsg', d.error); return; }
-    renderOptions(d);
-  } catch(e) {
-    hide('optLoading'); show('optError'); setText('optErrorMsg', e.message);
-  }
-}
-
-async function loadOptionPositions() {
-  const box = document.getElementById('optPositions');
-  try {
-    const d = await fetch(API + '/api/options/positions').then(x => x.json());
-    if (!d.connected || d.error || !d.positions || !d.positions.length) { box.innerHTML = ''; return; }
-    box.innerHTML = d.positions.map(renderPositionCard).join('');
-  } catch(_) { box.innerHTML = ''; }
-}
-
-function renderPositionCard(g) {
-  const inr = v => v == null ? '—' : '₹' + Number(v).toLocaleString('en-IN', {maximumFractionDigits:2});
-  const stCls = {safe:'trend-bull', watch:'trend-hold', tested:'trend-hold', breached:'trend-bear', unknown:'trend-hold'};
-  const stTxt = {safe:'Safe', watch:'Watch', tested:'Tested ⚠️', breached:'Breached 🔴', unknown:'—'};
-  const exp = new Date(g.expiry).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
-
-  const legRows = (g.legs||[]).map(l => {
-    const pnlCls = (l.pnl||0) >= 0 ? 'g' : 'r';
-    const sc = stCls[l.status] || 'trend-hold';
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border-inner)">
-      <div><b>SELL ${l.strike} ${l.type}</b> <span class="d" style="font-size:11px">×${Math.abs(l.qty)}</span></div>
-      <div style="display:flex;gap:14px;align-items:center;font-size:12px">
-        ${l.pop_pct!=null?`<span>${l.pop_pct}% safe</span>`:''}
-        <span class="${pnlCls}">${inr(l.pnl)}</span>
-        <span class="trend-badge ${sc}" style="padding:1px 8px">${stTxt[l.status]||l.status}</span>
-      </div></div>`;
-  }).join('');
-
-  let adjHtml = '';
-  if (g.adjustment) {
-    const a = g.adjustment;
-    const acts = a.actions.map(act => {
-      const rec = act.kind === a.recommended;
-      const netCls = act.net_type === 'credit' ? 'g' : 'r';
-      const netTxt = `${act.net_type==='credit'?'+':''}${inr(act.net)} ${act.net_type}`;
-      return `<div class="card" style="padding:10px 12px;margin-top:8px;${rec?'border:1px solid var(--accent);background:var(--accent-subtle)':''}">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <b style="font-size:13px">${rec?'✅ ':''}${act.title}</b>
-          <span class="${netCls}" style="font-weight:700;white-space:nowrap">${netTxt}</span>
-        </div>
-        <div style="font-size:11px;color:var(--t2);margin-top:3px">${act.detail}</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:2px">${act.why}</div>
-      </div>`;
-    }).join('');
-    adjHtml = `<div style="margin-top:10px">
-      <div style="font-size:12px;font-weight:700;color:var(--warn-t)">⚠️ Your ${a.tested_side} is being tested — best ways to adjust:</div>
-      ${acts}
-    </div>`;
-  }
-
-  return `<div class="card" style="padding:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <span class="card-title">${g.underlying} ${exp} · spot ${inr(g.spot)}</span>
-      <span class="trend-badge ${stCls[g.status]||'trend-hold'}">${stTxt[g.status]||g.status}</span>
-    </div>
-    ${legRows}
-    ${adjHtml}
-  </div>`;
-}
-
-async function loadOptBacktest() {
-  const u = document.getElementById('opt-underlying')?.value || 'NIFTY';
-  const r = document.getElementById('opt-risk')?.value || 'balanced';
-  const sx = document.getElementById('opt-stop')?.value || '0';
-  const wk = document.getElementById('opt-weeks')?.value || '52';
-  hide('optBtResult'); hide('optBtHint'); show('optBtLoading');
-  try {
-    const d = await fetch(API + `/api/options/backtest?underlying=${u}&risk=${r}&weeks=${wk}&stop_x=${sx}`).then(x => x.json());
-    hide('optBtLoading');
-    if (d.error || !d.rows || !d.rows.length) { show('optBtHint'); setText('optBtHint', d.error || 'No data'); return; }
-    const inr = v => (v >= 0 ? '+₹' : '−₹') + Math.abs(v).toLocaleString('en-IN');
-    document.getElementById('optBtSummary').innerHTML =
-      `<span class="trend-badge trend-bull" style="padding:1px 8px">Real NSE</span>
-       <span>Win rate: <b>${d.win_rate}%</b></span>
-       <span>Total: <b class="${d.total_pnl>=0?'g':'r'}">${inr(d.total_pnl)}</b></span>
-       <span>Avg/week: <b class="${d.avg_pnl>=0?'g':'r'}">${inr(d.avg_pnl)}</b></span>
-       <span>Worst: <b class="r">${inr(d.worst_pnl)}</b></span>
-       ${d.stops?`<span class="d">${d.stops} stop${d.stops>1?'s':''}</span>`:''}
-       <span class="d">(${d.weeks} wks · lot ${d.lot_size})</span>`;
-    document.getElementById('optBtBody').innerHTML = d.rows.map(w => {
-      const mv = (((w.spot_end/w.spot_start-1)*100)).toFixed(1);
-      const tag = w.stopped ? ['Stopped','trend-hold'] : w.win ? ['Win','trend-bull'] : ['Loss','trend-bear'];
-      return `<tr>
-        <td style="text-align:left">${w.entry_date.slice(5)}→${w.exit_date.slice(5)}</td>
-        <td class="${mv>=0?'g':'r'}">${mv>=0?'+':''}${mv}%</td>
-        <td class="d" style="font-size:11px">${w.put}P / ${w.call}C</td>
-        <td>${w.premium}</td>
-        <td><span class="trend-badge ${tag[1]}" style="padding:1px 8px">${tag[0]}${(!w.stopped&&!w.in_range)?' · breached':''}</span></td>
-        <td class="${w.pnl>=0?'g':'r'}" style="font-weight:700">${inr(w.pnl)}</td>
-      </tr>`;
-    }).join('');
-    show('optBtResult');
-  } catch(e) { hide('optBtLoading'); show('optBtHint'); setText('optBtHint', e.message); }
-}
-
-function renderOptions(d) {
-  show('optContent');
-  const inr = v => v == null ? '—' : '₹' + Number(v).toLocaleString('en-IN', {maximumFractionDigits:2});
-  const nm  = {NIFTY:'Nifty 50', BANKNIFTY:'Bank Nifty', FINNIFTY:'Fin Nifty'}[d.underlying] || d.underlying;
-  const expFmt = new Date(d.expiry).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
-  const a = d.analysis || {};
-
-  setText('optHead',
-    `${nm} at ${inr(d.spot)} · expires ${expFmt} (${d.days_to_expiry}d) · targeting ~${d.target_pop}% win odds`);
-  setText('optAsOf', 'live');
-
-  // analysis strip
-  setText('optImplied', `±${a.implied_move} (${a.implied_move_pct}%)`);
-  setText('optRealized', a.realized_move != null ? `±${a.realized_move} (${a.realized_move_pct}%)` : '—');
-  setText('optSd1', `${a.sd1_low} – ${a.sd1_high}`);
-  setText('optSd2', `${a.sd2_low} – ${a.sd2_high}`);
-  setText('optZone', `${d.put.breakeven} – ${d.call.breakeven}`);
-  const sig = document.getElementById('optSignal');
-  const sigMap = {rich:['Premium rich — good to sell','trend-bull'],
-                  fair:['Premium fair','trend-hold'],
-                  cheap:['Premium cheap — thin edge','trend-bear'],
-                  unknown:['—','trend-hold']};
-  const [sigTxt, sigCls] = sigMap[a.sell_signal] || sigMap.unknown;
-  sig.textContent = sigTxt; sig.className = 'trend-badge ' + sigCls;
-
-  setText('optCallStrike', `${d.call.strike} CE`);
-  setText('optCallDist',   d.call.distance_pct != null ? `${d.call.distance_pct}% above spot` : '');
-  setText('optCallPrem',   inr(d.call.premium));
-  setText('optCallPop',    `${d.call.pop_pct}% safe`);
-  setText('optCallBe',     d.call.breakeven);
-
-  setText('optPutStrike',  `${d.put.strike} PE`);
-  setText('optPutDist',    d.put.distance_pct != null ? `${Math.abs(d.put.distance_pct)}% below spot` : '');
-  setText('optPutPrem',    inr(d.put.premium));
-  setText('optPutPop',     `${d.put.pop_pct}% safe`);
-  setText('optPutBe',      d.put.breakeven);
-
-  setText('optPlain',
-    `If ${nm} stays between ${d.range_low} and ${d.range_high} by ${expFmt}, you keep all the premium:`);
-  setText('optKeep', inr(d.premium_per_lot) + ' per lot');
-  setText('optKeepSub',
-    `${inr(d.total_premium)} × ${d.lot_size} (lot size) · sell 1 lot each of ${d.call.strike} CE and ${d.put.strike} PE`);
-
-  // candidate ladders (highlight the selected strike)
-  const ladder = (rows, selStrike) => (rows || []).map(c => {
-    const sel = Math.abs(c.strike - selStrike) < 1e-6;
-    return `<tr style="${sel ? 'background:var(--accent-subtle);font-weight:700' : ''}">
-      <td style="text-align:left">${c.strike}${sel ? ' ◄' : ''}</td>
-      <td>${inr(c.premium)}</td>
-      <td><span class="${c.pop_pct >= 80 ? 'g' : c.pop_pct >= 70 ? '' : 'r'}">${c.pop_pct}%</span></td>
-      <td class="d">${c.distance_pct}%</td></tr>`;
-  }).join('');
-  document.getElementById('optCallLadder').innerHTML = ladder(d.call_candidates, d.call.strike);
-  document.getElementById('optPutLadder').innerHTML  = ladder(d.put_candidates, d.put.strike);
-}
-
 // ── Dark mode ─────────────────────────────────────────────────────────────────
-let _symbolsHidden = false;
-function toggleHideSymbols() {
-  _symbolsHidden = !_symbolsHidden;
-  document.getElementById('tab-portfolio').classList.toggle('symbols-hidden', _symbolsHidden);
-  const btn = document.getElementById('btnHideSymbols');
-  btn.textContent = _symbolsHidden ? '👁 Show Names' : '👁 Hide Names';
-  btn.style.color = _symbolsHidden ? 'var(--accent)' : '';
-}
-
 function initDark() {
   const saved = localStorage.getItem('theme') || 'light';
   document.documentElement.setAttribute('data-theme', saved);
@@ -2971,32 +1324,16 @@ function drawSparkline(containerId, values) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-function round4(v) { return Math.round(v * 10000) / 10000; }
-
 async function init() {
   initDark();
-  const validTabs = ['home', 'portfolio', 'minervini', 'ha', 'screener', 'options'];
+  const validTabs = ['ha', 'screener'];
   const hashTab = window.location.hash.slice(1);
-  if (hashTab && validTabs.includes(hashTab)) goToTab(hashTab);
-
-  updateRefreshUI();
-  scheduleRefresh();
-
-  const today      = new Date().toISOString().split('T')[0];
-  const oneYearAgo = new Date(Date.now() - 365*86400000).toISOString().split('T')[0];
-  document.getElementById('ha-from').value = oneYearAgo;
-  document.getElementById('ha-to').value   = today;
-
-  // Load cached results in background
-  try {
-    const res = await fetch(API + '/api/minervini/backtest/result');
-    if (res.ok) renderMinervini(await res.json());
-  } catch(_) {}
+  goToTab(validTabs.includes(hashTab) ? hashTab : 'screener');
 
   // Load auto-execute status silently
   try { await loadAutoLog(); } catch(_) {}
 
-  // Check Kite silently for home card status
+  // Check Kite silently for the Pulse tab status bar
   try {
     const s = await fetch(API + '/api/kite/status').then(r => r.json());
     if (s.connected) {
