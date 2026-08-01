@@ -228,6 +228,10 @@ tbody td:first-child{text-align:left;color:var(--t1);font-weight:600}
 .trend-bear{background:var(--red-bg);color:var(--red);border:1px solid var(--red-br)}
 .trend-hold{background:var(--warn-bg);color:var(--warn-t);border:1px solid var(--warn-br)}
 .ma-cell{font-variant-numeric:tabular-nums;white-space:nowrap}
+.breadth-stat{display:flex;flex-direction:column;align-items:center;padding:6px 14px;border-radius:8px;background:var(--bg-alt);border:1px solid var(--border);min-width:80px;gap:2px}
+.breadth-val{font-size:17px;font-weight:800;line-height:1}
+.breadth-lbl{font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.breadth-pct{font-size:10px;font-weight:600;color:var(--t3)}
 .var-pos{background:var(--green-bg);color:var(--green);font-weight:600}
 .var-neg{background:var(--red-bg);color:var(--red);font-weight:600}
 .status-text{font-size:13px;color:var(--t2)}
@@ -470,6 +474,8 @@ html{scroll-behavior:smooth}
       <button class="btn btn-ghost btn-sm" onclick="downloadScreenerCSV()" title="Download current screener as CSV">⬇ CSV</button>
     </span>
   </div>
+
+  <div id="breadthBar" class="hidden" style="display:flex;gap:12px;flex-wrap:wrap;padding:10px 0 4px;border-bottom:1px solid var(--border)"></div>
 
   <div id="screenEmpty" class="page hidden">
     <div class="empty">
@@ -1114,6 +1120,36 @@ async function loadScreener(fresh = false) {
   }
 }
 
+function renderBreadth() {
+  const bar = document.getElementById('breadthBar');
+  if (!bar || !_screenData.length) { bar?.classList.add('hidden'); return; }
+
+  const n   = _screenData.length;
+  const pct = v => `${Math.round(v / n * 100)}%`;
+  const col = v => v / n >= 0.5 ? 'var(--green)' : v / n >= 0.3 ? 'var(--warn-t)' : 'var(--red)';
+
+  const above50  = _screenData.filter(r => r.criteria?.c7).length;
+  const above200 = _screenData.filter(r => r.criteria?.c2).length;
+  const bullish  = _screenData.filter(r => r.criteria?.c7 && r.criteria?.c2).length;
+  const rs70     = _screenData.filter(r => r.criteria?.c10).length;
+  const sepa     = _screenData.filter(r => r.sepa_pass).length;
+
+  const stat = (val, label) => `
+    <div class="breadth-stat">
+      <span class="breadth-val" style="color:${col(val)}">${val}</span>
+      <span class="breadth-lbl">${label}</span>
+      <span class="breadth-pct">${pct(val)} of ${n}</span>
+    </div>`;
+
+  bar.innerHTML =
+    stat(above50,  'Above 50 DMA') +
+    stat(above200, 'Above 200 DMA') +
+    stat(bullish,  'Bullish Trend') +
+    stat(rs70,     'RS ≥ 70') +
+    stat(sepa,     'SEPA Pass');
+  bar.classList.remove('hidden');
+}
+
 function downloadScreenerCSV() {
   if (!_screenData.length) { alert('No screener data — load the screen first.'); return; }
   const ccy = _scrMarket === 'us' ? 'USD' : 'INR';
@@ -1154,7 +1190,8 @@ function downloadScreenerCSV() {
 }
 
 function renderScreen() {
-  if (!_screenData.length) { show('screenEmpty'); hide('screenResults'); hide('screenLoading'); return; }
+  if (!_screenData.length) { show('screenEmpty'); hide('screenResults'); hide('screenLoading'); hide('breadthBar'); return; }
+  renderBreadth();
 
   // MCap filter (India only)
   const isIndia = _scrMarket === 'india';
