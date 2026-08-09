@@ -15,6 +15,8 @@ Endpoints:
   GET  /api/trade/holdings      — current NSE equity holdings
   POST /api/trade/sell          — sell (part or all of) an equity holding
 
+  POST /api/forecast/kronos     — Kronos foundation-model forecast (Buy Top 20 confirmation layer)
+
   GET  /api/pulse/signal        — live NIFTY HA signal + option details
   POST /api/pulse/sell          — sell NIFTY ATM option
   POST /api/pulse/close         — close an open option position
@@ -220,6 +222,22 @@ async def trade_sell(params: TradeSellParams):
     except KiteException as e:
         raise HTTPException(403, str(e))
     return {"order_id": oid, "symbol": params.symbol, "quantity": params.quantity}
+
+
+# ── Kronos forecast (screener confirmation layer) ──────────────────────────────
+
+class KronosForecastParams(BaseModel):
+    symbols: list[str]
+    market:  str = "india"
+
+
+@app.post("/api/forecast/kronos")
+async def forecast_kronos(params: KronosForecastParams):
+    import kronos_forecast as kf
+    loop = asyncio.get_event_loop()
+    rows = await loop.run_in_executor(
+        _executor, lambda: kf.forecast_symbols(params.symbols, params.market))
+    return {"rows": rows}
 
 
 def _benchmark_for(market: str):

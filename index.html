@@ -1226,10 +1226,26 @@ async function buyTop20() {
   const btn = document.getElementById('buyTop20Btn');
   btn.disabled = true;
   try {
+    showToast('Running Kronos forecast on top 20 (can take a minute on CPU)…', 'success', 6000);
+    const kRes = await fetch(API + '/api/forecast/kronos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbols, market: _scrMarket }),
+    });
+    if (!kRes.ok) throw new Error(await kRes.text());
+    const { rows: kRows } = await kRes.json();
+
+    const confirmed = kRows.filter(r => r.trend === 'up').map(r => r.symbol);
+    const rejected  = kRows.filter(r => r.trend !== 'up');
+    if (!confirmed.length) {
+      showToast('Kronos did not confirm an uptrend on any of the top 20 — no buy', 'error');
+      return;
+    }
+
     const res = await fetch(API + '/api/trade/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbols, budget }),
+      body: JSON.stringify({ symbols: confirmed, budget }),
     });
     if (!res.ok) throw new Error(await res.text());
     const { rows } = await res.json();
@@ -1237,13 +1253,15 @@ async function buyTop20() {
     const buyRows  = rows.filter(r => !r.skipped);
     const skipRows = rows.filter(r => r.skipped);
     const totalCost = buyRows.reduce((s, r) => s + r.cost, 0);
-    const perStock = budget / symbols.length;
+    const perStock = budget / confirmed.length;
 
-    let msg = `Buy ${buyRows.length} stocks · equal-rupee allocation `
+    let msg = `Kronos confirmed ${confirmed.length}/${symbols.length} · `
+            + `buying ${buyRows.length} stocks · equal-rupee allocation `
             + `(~₹${perStock.toLocaleString('en-IN', {maximumFractionDigits:0})}/stock)\n\n`
             + buyRows.map(r => `${r.symbol.padEnd(14)} qty ${r.qty}  @ ₹${r.ltp}  = ₹${r.cost.toLocaleString('en-IN')}`).join('\n')
             + `\n\nTotal: ~₹${totalCost.toLocaleString('en-IN', {maximumFractionDigits:0})}`;
     if (skipRows.length) msg += `\n\nSkipped (price > allocation): ${skipRows.map(r => r.symbol).join(', ')}`;
+    if (rejected.length) msg += `\n\nKronos rejected: ${rejected.map(r => r.symbol + (r.trend === 'down' ? ` (${r.pct_change}%)` : ' (no data)')).join(', ')}`;
     msg += `\n\nMarket order · CNC · NSE\nProceed?`;
 
     if (!buyRows.length || !confirm(msg)) return;
