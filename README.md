@@ -13,6 +13,8 @@ A self-hosted stock screening and options trading dashboard for Indian (NSE) and
 - **Column sorting** by RS Rating or Market Cap (asc/desc toggle)
 - **US market** — same criteria against the S&P 500 universe
 - Same-day price cache: first run downloads ~5 years of daily OHLCV, subsequent runs are instant
+- **Buy Top 20** — equal-rupee buy across the top 20 SEPA full-pass stocks by RS Rating; enter a budget, review a live-priced order preview, confirm to place CNC market orders on Kite (India only)
+- **Holdings panel** — view current NSE equity holdings with live P&L and sell (full or partial) at market
 
 ### Pulse (NIFTY Options Signal)
 - **Live Heikin-Ashi signal** — 30-minute candle HA direction for NIFTY (LONG / SHORT / FLAT)
@@ -79,6 +81,7 @@ On first load the screener downloads ~5 years of daily prices for 1,690 NSE stoc
 server.py          FastAPI app — screener + pulse endpoints
 minervini.py       SEPA criteria computation (vectorised pandas)
 strategy.py        Universe loading, price download, MCap data
+trade_live.py      Kite integration — equity buy/sell, holdings (Buy Top 20)
 pulse_live.py      Kite integration — signal, positions, orders
 kite_auth.py       OAuth flow for Kite Connect
 config.py          Env-based configuration

@@ -472,10 +472,28 @@ html{scroll-behavior:smooth}
       <span id="screenAsOf" class="d" style="font-size:11px"></span>
       <button class="btn btn-ghost btn-sm" onclick="loadScreener(true)" title="Force a live re-pull of the latest prices">↻ Refresh (live)</button>
       <button class="btn btn-ghost btn-sm" onclick="downloadScreenerCSV()" title="Download current screener as CSV">⬇ CSV</button>
+      <span id="scrBuyGroup" style="display:none;align-items:center;gap:6px">
+        <span class="param-sep">·</span>
+        <label style="font-size:11px;color:var(--t3)">Budget ₹</label>
+        <input type="number" id="scrBuyBudget" value="200000" min="1000" step="1000" style="width:90px">
+        <button class="btn btn-primary btn-sm" onclick="buyTop20()" id="buyTop20Btn"
+                title="Equal-rupee buy across the top 20 SEPA full-pass stocks by RS Rating">Buy Top 20</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleHoldings()" id="holdingsToggleBtn">Holdings</button>
+      </span>
     </span>
   </div>
 
+  <div id="scrKiteNote" class="hidden" style="font-size:11px;color:var(--t3);padding:6px 0"></div>
+
   <div id="breadthBar" class="hidden" style="display:flex;gap:12px;flex-wrap:wrap;padding:10px 0 4px;border-bottom:1px solid var(--border)"></div>
+
+  <div id="holdingsPanel" class="hidden" style="border-bottom:1px solid var(--border);padding:10px 0">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.07em">Equity Holdings</span>
+      <button class="btn btn-ghost btn-sm" onclick="loadHoldings()">↺ Refresh</button>
+    </div>
+    <div id="holdingsRows" style="font-size:12px"></div>
+  </div>
 
   <div id="screenEmpty" class="page hidden">
     <div class="empty">
@@ -1189,6 +1207,125 @@ function downloadScreenerCSV() {
   URL.revokeObjectURL(url);
 }
 
+// ── Buy Top 20 (SEPA full-pass, equal-rupee allocation) ────────────────────────
+function top20Symbols() {
+  return _screenData
+    .filter(r => r.sepa_pass && r.rs_rating != null)
+    .sort((a, b) => b.rs_rating - a.rs_rating)
+    .slice(0, 20)
+    .map(r => r.symbol);
+}
+
+async function buyTop20() {
+  if (_scrMarket !== 'india') return;
+  const symbols = top20Symbols();
+  if (!symbols.length) { showToast('No SEPA full-pass stocks in the current screen', 'error'); return; }
+  const budget = +document.getElementById('scrBuyBudget').value || 0;
+  if (budget < symbols.length) { showToast(`Budget too small for ${symbols.length} stocks`, 'error'); return; }
+
+  const btn = document.getElementById('buyTop20Btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch(API + '/api/trade/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbols, budget }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const { rows } = await res.json();
+
+    const buyRows  = rows.filter(r => !r.skipped);
+    const skipRows = rows.filter(r => r.skipped);
+    const totalCost = buyRows.reduce((s, r) => s + r.cost, 0);
+    const perStock = budget / symbols.length;
+
+    let msg = `Buy ${buyRows.length} stocks · equal-rupee allocation `
+            + `(~₹${perStock.toLocaleString('en-IN', {maximumFractionDigits:0})}/stock)\n\n`
+            + buyRows.map(r => `${r.symbol.padEnd(14)} qty ${r.qty}  @ ₹${r.ltp}  = ₹${r.cost.toLocaleString('en-IN')}`).join('\n')
+            + `\n\nTotal: ~₹${totalCost.toLocaleString('en-IN', {maximumFractionDigits:0})}`;
+    if (skipRows.length) msg += `\n\nSkipped (price > allocation): ${skipRows.map(r => r.symbol).join(', ')}`;
+    msg += `\n\nMarket order · CNC · NSE\nProceed?`;
+
+    if (!buyRows.length || !confirm(msg)) return;
+
+    const orders = buyRows.map(r => ({ symbol: r.symbol, qty: r.qty }));
+    const buyRes = await fetch(API + '/api/trade/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders }),
+    });
+    if (!buyRes.ok) throw new Error(await buyRes.text());
+    const { results } = await buyRes.json();
+    const okCount = results.filter(r => r.order_id).length;
+    const failed  = results.filter(r => r.error);
+    showToast(`${okCount}/${results.length} orders placed` + (failed.length ? ` · ${failed.length} failed` : ''),
+               failed.length ? 'error' : 'success');
+    if (failed.length) console.warn('Buy Top 20 failures:', failed);
+    loadHoldings();
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Equity holdings panel ──────────────────────────────────────────────────────
+let _holdingsOpen = false;
+
+function toggleHoldings() {
+  _holdingsOpen = !_holdingsOpen;
+  if (_holdingsOpen) { show('holdingsPanel'); loadHoldings(); }
+  else { hide('holdingsPanel'); }
+}
+
+async function loadHoldings() {
+  const wrap = document.getElementById('holdingsRows');
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="color:var(--t3);padding:8px 0">Loading…</div>';
+  try {
+    const res = await fetch(API + '/api/trade/holdings');
+    if (!res.ok) throw new Error(await res.text());
+    const { rows } = await res.json();
+    renderHoldings(rows);
+  } catch(e) {
+    wrap.innerHTML = `<div style="color:var(--red);padding:8px 0">${e.message}</div>`;
+  }
+}
+
+function renderHoldings(rows) {
+  const wrap = document.getElementById('holdingsRows');
+  if (!rows.length) { wrap.innerHTML = '<div style="color:var(--t3);padding:8px 0">No holdings.</div>'; return; }
+  wrap.innerHTML = rows.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border-inner)">
+      <span style="font-weight:700;width:110px">${r.symbol}</span>
+      <span style="color:var(--t3);width:70px">qty ${r.quantity}</span>
+      <span style="width:100px">avg ₹${r.average_price}</span>
+      <span style="width:100px">ltp ₹${r.last_price}</span>
+      <span style="width:100px" class="${r.pnl >= 0 ? 'g' : 'r'}">${r.pnl >= 0 ? '+' : ''}₹${r.pnl}</span>
+      <input type="number" value="${r.quantity}" min="1" max="${r.quantity}" style="width:60px" id="sellQty-${r.symbol}">
+      <button class="btn btn-ghost btn-sm" onclick="sellHolding('${r.symbol}', ${r.quantity})">Sell</button>
+    </div>`).join('');
+}
+
+async function sellHolding(symbol, maxQty) {
+  const input = document.getElementById(`sellQty-${symbol}`);
+  const qty = Math.min(Math.max(1, +input.value || maxQty), maxQty);
+  if (!confirm(`Sell ${qty} × ${symbol}?\nMarket order · CNC · NSE`)) return;
+  try {
+    const res = await fetch(API + '/api/trade/sell', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol, quantity: qty }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    showToast(`✓ Sold ${qty} × ${symbol} · #${data.order_id}`);
+    loadHoldings();
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
 function renderScreen() {
   if (!_screenData.length) { show('screenEmpty'); hide('screenResults'); hide('screenLoading'); hide('breadthBar'); return; }
   renderBreadth();
@@ -1203,6 +1340,9 @@ function renderScreen() {
 
   const vis = v => { const el = document.getElementById(v); if (el) el.style.display = isIndia ? '' : 'none'; };
   vis('scrMcapGroup'); vis('scrMcapSep1'); vis('scrMcapSep2');
+  const buyGroup = document.getElementById('scrBuyGroup');
+  if (buyGroup) buyGroup.style.display = isIndia ? 'inline-flex' : 'none';
+  if (!isIndia) { hide('holdingsPanel'); }
   const mcapHdr = document.getElementById('screenMcapHdr');
   if (mcapHdr) mcapHdr.style.display = isIndia ? '' : 'none';
 

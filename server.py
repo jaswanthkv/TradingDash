@@ -10,6 +10,11 @@ Endpoints:
   GET  /api/kite/login          — redirect to Kite OAuth login page
   GET  /api/kite/callback       — OAuth callback
 
+  POST /api/trade/preview       — live LTP + qty preview for an equal-rupee buy across symbols
+  POST /api/trade/buy           — place CNC market buy orders (equity)
+  GET  /api/trade/holdings      — current NSE equity holdings
+  POST /api/trade/sell          — sell (part or all of) an equity holding
+
   GET  /api/pulse/signal        — live NIFTY HA signal + option details
   POST /api/pulse/sell          — sell NIFTY ATM option
   POST /api/pulse/close         — close an open option position
@@ -145,6 +150,76 @@ def kite_callback(request_token: str = "", status: str = ""):
         return RedirectResponse("/?kite=connected")
     except Exception:
         return RedirectResponse("/?kite=error")
+
+
+# ── Equity trading (Buy Top 20 / holdings) ─────────────────────────────────────
+
+class TradePreviewParams(BaseModel):
+    symbols: list[str]
+    budget:  float
+
+
+class TradeBuyOrder(BaseModel):
+    symbol: str
+    qty:    int
+
+
+class TradeBuyParams(BaseModel):
+    orders: list[TradeBuyOrder]
+
+
+class TradeSellParams(BaseModel):
+    symbol:   str
+    quantity: int
+
+
+def _require_kite():
+    status = kite_auth.kite_status()
+    if not status.get("connected"):
+        raise HTTPException(401, status.get("reason", "Kite not connected"))
+    return kite_auth.get_kite()
+
+
+@app.post("/api/trade/preview")
+async def trade_preview(params: TradePreviewParams):
+    import trade_live as tl
+    kite = _require_kite()
+    loop = asyncio.get_event_loop()
+    rows = await loop.run_in_executor(_executor, lambda: tl.preview_buy(kite, params.symbols, params.budget))
+    return {"rows": rows, "budget": params.budget}
+
+
+@app.post("/api/trade/buy")
+async def trade_buy(params: TradeBuyParams):
+    import trade_live as tl
+    kite = _require_kite()
+    orders = [o.dict() for o in params.orders]
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(_executor, lambda: tl.place_buy_orders(kite, orders))
+    return {"results": results}
+
+
+@app.get("/api/trade/holdings")
+async def trade_holdings():
+    import trade_live as tl
+    kite = _require_kite()
+    loop = asyncio.get_event_loop()
+    rows = await loop.run_in_executor(_executor, lambda: tl.get_holdings(kite))
+    return {"rows": rows}
+
+
+@app.post("/api/trade/sell")
+async def trade_sell(params: TradeSellParams):
+    import trade_live as tl
+    from kiteconnect.exceptions import KiteException
+    kite = _require_kite()
+    loop = asyncio.get_event_loop()
+    try:
+        oid = await loop.run_in_executor(
+            _executor, lambda: tl.sell_holding(kite, params.symbol, params.quantity))
+    except KiteException as e:
+        raise HTTPException(403, str(e))
+    return {"order_id": oid, "symbol": params.symbol, "quantity": params.quantity}
 
 
 def _benchmark_for(market: str):
