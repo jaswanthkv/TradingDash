@@ -1,0 +1,85 @@
+{
+  "inception_date": "2026-08-10",
+  "starting_capital_inr": 1000000,
+  "cash_inr": 63127.30000000002,
+  "holdings": {
+    "METROPOLIS": {
+      "qty": 98,
+      "avg_cost": 562.3
+    },
+    "ALKYLAMINE": {
+      "qty": 29,
+      "avg_cost": 1893.0
+    },
+    "GALAXYSURF": {
+      "qty": 27,
+      "avg_cost": 2067.0
+    },
+    "HOMEFIRST": {
+      "qty": 46,
+      "avg_cost": 1193.0
+    },
+    "JUSTDIAL": {
+      "qty": 80,
+      "avg_cost": 683.0
+    },
+    "ROUTE": {
+      "qty": 104,
+      "avg_cost": 527.8
+    },
+    "VIJAYA": {
+      "qty": 41,
+      "avg_cost": 1348.0
+    },
+    "ESABINDIA": {
+      "qty": 10,
+      "avg_cost": 5630.0
+    },
+    "KNRCON": {
+      "qty": 387,
+      "avg_cost": 142.0
+    },
+    "CCL": {
+      "qty": 49,
+      "avg_cost": 1128.0
+    },
+    "SBFC": {
+      "qty": 579,
+      "avg_cost": 95.0
+    },
+    "CAMPUS": {
+      "qty": 245,
+      "avg_cost": 224.0
+    },
+    "MASTEK": {
+      "qty": 30,
+      "avg_cost": 1833.0
+    },
+    "CMSINFO": {
+      "qty": 201,
+      "avg_cost": 273.1
+    },
+    "AVANTIFEED": {
+      "qty": 60,
+      "avg_cost": 909.0
+    },
+    "SYRMA": {
+      "qty": 39,
+      "avg_cost": 1420.0
+    },
+    "ASTRAMICRO": {
+      "qty": 30,
+      "avg_cost": 1839.0
+    }
+  },
+  "benchmark": "NIFTY_MICROCAP250.NS",
+  "benchmark_inception_value": 26032,
+  "last_rebalance_date": "2026-08-09",
+  "nav_history": [
+    {
+      "date": "2026-08-09",
+      "nav": 1000000.0,
+      "benchmark": 26032
+    }
+  ]
+}

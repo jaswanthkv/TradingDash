@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nifty Microcap 250 - LLM Portfolio</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f7f7f8; margin: 0; padding: 32px; color: #1a1a1a; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .subtitle { color: #6b7280; font-size: 14px; margin-bottom: 24px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .card { background: white; border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .card .label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+  .card .value { font-size: 26px; font-weight: 600; margin-top: 4px; }
+  .chart-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 28px; }
+  .section-title { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 10px; color: #6b7280; font-weight: 600; border-bottom: 1px solid #e5e7eb; font-size: 11px; text-transform: uppercase; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f0f0f1; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.dim { color: #6b7280; }
+  td.reasoning { max-width: 320px; font-size: 12px; }
+  .buy { color: #16a34a; font-weight: 600; }
+  .sell { color: #dc2626; font-weight: 600; }
+  .table-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 28px; overflow-x: auto; }
+  .footer-note { font-size: 12px; color: #9ca3af; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Nifty Microcap 250 &mdash; LLM Portfolio (Claude)</h1>
+  <div class="subtitle">Paper trading experiment &middot; inception 2026-08-10 &middot; last rebalance 2026-08-09</div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">NAV</div>
+      <div class="value">Rs.1,000,000</div>
+    </div>
+    <div class="card">
+      <div class="label">Total Return</div>
+      <div class="value" style="color:#16a34a">+0.00%</div>
+    </div>
+    <div class="card">
+      <div class="label">Nifty Microcap 250</div>
+      <div class="value" style="color:#16a34a">+0.00%</div>
+    </div>
+    <div class="card">
+      <div class="label">Holdings / Cash</div>
+      <div class="value">17 &middot; Rs.63,127</div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="section-title">NAV vs Nifty Microcap 250 (rebased to starting capital)</div>
+    <canvas id="navChart" height="90"></canvas>
+  </div>
+
+  <div class="table-card">
+    <div class="section-title">Current Holdings</div>
+    <table>
+      <thead><tr><th>Symbol</th><th>Company</th><th class="num">Qty</th><th class="num">Avg Cost</th><th class="num">Value</th><th class="num">Weight</th></tr></thead>
+      <tbody><tr>
+            <td>ESABINDIA</td>
+            <td class="dim">Esab India Limited</td>
+            <td class="num">10</td>
+            <td class="num">Rs.5,630.00</td>
+            <td class="num">Rs.56,300</td>
+            <td class="num">5.6%</td>
+        </tr><tr>
+            <td>GALAXYSURF</td>
+            <td class="dim">Galaxy Surfactants Limited</td>
+            <td class="num">27</td>
+            <td class="num">Rs.2,067.00</td>
+            <td class="num">Rs.55,809</td>
+            <td class="num">5.6%</td>
+        </tr><tr>
+            <td>SYRMA</td>
+            <td class="dim">Syrma Sgs Technology Limited</td>
+            <td class="num">39</td>
+            <td class="num">Rs.1,420.00</td>
+            <td class="num">Rs.55,380</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>CCL</td>
+            <td class="dim">Ccl Products (India) Limited</td>
+            <td class="num">49</td>
+            <td class="num">Rs.1,128.00</td>
+            <td class="num">Rs.55,272</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>VIJAYA</td>
+            <td class="dim">Vijaya Diagnostic Centre Limited</td>
+            <td class="num">41</td>
+            <td class="num">Rs.1,348.00</td>
+            <td class="num">Rs.55,268</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>ASTRAMICRO</td>
+            <td class="dim">Astra Microwave Products Limited</td>
+            <td class="num">30</td>
+            <td class="num">Rs.1,839.00</td>
+            <td class="num">Rs.55,170</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>METROPOLIS</td>
+            <td class="dim">Metropolis Healthcare Limited</td>
+            <td class="num">98</td>
+            <td class="num">Rs.562.30</td>
+            <td class="num">Rs.55,105</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>SBFC</td>
+            <td class="dim">Sbfc Finance Limited</td>
+            <td class="num">579</td>
+            <td class="num">Rs.95.00</td>
+            <td class="num">Rs.55,005</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>MASTEK</td>
+            <td class="dim">Mastek Limited</td>
+            <td class="num">30</td>
+            <td class="num">Rs.1,833.00</td>
+            <td class="num">Rs.54,990</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>KNRCON</td>
+            <td class="dim">Knr Constructions Limited</td>
+            <td class="num">387</td>
+            <td class="num">Rs.142.00</td>
+            <td class="num">Rs.54,954</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>ALKYLAMINE</td>
+            <td class="dim">Alkyl Amines Chemicals Limited</td>
+            <td class="num">29</td>
+            <td class="num">Rs.1,893.00</td>
+            <td class="num">Rs.54,897</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>CMSINFO</td>
+            <td class="dim">Cms Info Systems Limited</td>
+            <td class="num">201</td>
+            <td class="num">Rs.273.10</td>
+            <td class="num">Rs.54,893</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>ROUTE</td>
+            <td class="dim">Route Mobile Limited</td>
+            <td class="num">104</td>
+            <td class="num">Rs.527.80</td>
+            <td class="num">Rs.54,891</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>CAMPUS</td>
+            <td class="dim">Campus Activewear Limited</td>
+            <td class="num">245</td>
+            <td class="num">Rs.224.00</td>
+            <td class="num">Rs.54,880</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>HOMEFIRST</td>
+            <td class="dim">Home First Finance Company India Limited</td>
+            <td class="num">46</td>
+            <td class="num">Rs.1,193.00</td>
+            <td class="num">Rs.54,878</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>JUSTDIAL</td>
+            <td class="dim">Just Dial Limited</td>
+            <td class="num">80</td>
+            <td class="num">Rs.683.00</td>
+            <td class="num">Rs.54,640</td>
+            <td class="num">5.5%</td>
+        </tr><tr>
+            <td>AVANTIFEED</td>
+            <td class="dim">Avanti Feeds Limited</td>
+            <td class="num">60</td>
+            <td class="num">Rs.909.00</td>
+            <td class="num">Rs.54,540</td>
+            <td class="num">5.5%</td>
+        </tr></tbody>
+    </table>
+  </div>
+
+  <div class="table-card">
+    <div class="section-title">Recent Trades</div>
+    <table>
+      <thead><tr><th>Date</th><th>Symbol</th><th>Action</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Value</th><th>Reasoning</th></tr></thead>
+      <tbody><tr>
+            <td class="dim">2026-08-09</td>
+            <td>ASTRAMICRO</td>
+            <td class="buy">BUY</td>
+            <td class="num">30</td>
+            <td class="num">Rs.1,839.00</td>
+            <td class="num">Rs.55,170</td>
+            <td class="dim reasoning">Defense electronics/RF systems maker, benefiting from India defense indigenization push, Q1 revenue more than doubled YoY. Very rich 91x P/E is the key risk - standard-size position, not oversized.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>SYRMA</td>
+            <td class="buy">BUY</td>
+            <td class="num">39</td>
+            <td class="num">Rs.1,420.00</td>
+            <td class="num">Rs.55,380</td>
+            <td class="dim reasoning">Electronics manufacturing services (EMS), Q1 EPS beat by 27.6% and revenue beat by 16.3% on India electronics manufacturing tailwinds. Priced at a rich 74x P/E, so kept to standard size pending margin durability.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>AVANTIFEED</td>
+            <td class="buy">BUY</td>
+            <td class="num">60</td>
+            <td class="num">Rs.909.00</td>
+            <td class="num">Rs.54,540</td>
+            <td class="dim reasoning">Shrimp feed manufacturer/exporter, 20x P/E, consistent ~9-11% margins. Agri-export exposure diversifies away from industrials/financials concentration.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>CMSINFO</td>
+            <td class="buy">BUY</td>
+            <td class="num">201</td>
+            <td class="num">Rs.273.10</td>
+            <td class="num">Rs.54,893</td>
+            <td class="dim reasoning">Cash logistics/ATM services with high recurring-revenue characteristics, ~15x P/E, steady double-digit net margins. Non-discretionary services exposure, low correlation to consumer-discretionary names already in the basket.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>MASTEK</td>
+            <td class="buy">BUY</td>
+            <td class="num">30</td>
+            <td class="num">Rs.1,833.00</td>
+            <td class="num">Rs.54,990</td>
+            <td class="dim reasoning">Mid-tier IT services/digital transformation, cheap at 13.7x P/E for the sector with an EPS beat this quarter. IT services diversifier.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>CAMPUS</td>
+            <td class="buy">BUY</td>
+            <td class="num">245</td>
+            <td class="num">Rs.224.00</td>
+            <td class="num">Rs.54,880</td>
+            <td class="dim reasoning">Branded footwear, EPS/revenue beat, 12%+ revenue growth this quarter. Consumer brand exposure, position sized modestly given a rich 45x P/E.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>SBFC</td>
+            <td class="buy">BUY</td>
+            <td class="num">579</td>
+            <td class="num">Rs.95.00</td>
+            <td class="num">Rs.55,005</td>
+            <td class="dim reasoning">MSME secured lending NBFC, ~44-46% net margins, reasonable 22x P/E. Adds financials exposure distinct from housing-finance-focused HOMEFIRST.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>CCL</td>
+            <td class="buy">BUY</td>
+            <td class="num">49</td>
+            <td class="num">Rs.1,128.00</td>
+            <td class="num">Rs.55,272</td>
+            <td class="dim reasoning">Instant coffee manufacturer/exporter, EPS beat, steady ~9-10% margins, diversified export base (India, Vietnam, Switzerland plants). Defensive consumer-export name for the basket.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>KNRCON</td>
+            <td class="buy">BUY</td>
+            <td class="num">387</td>
+            <td class="num">Rs.142.00</td>
+            <td class="num">Rs.54,954</td>
+            <td class="dim reasoning">Roads/infra EPC contractor, cheapest quality infra name at 9x P/E with consistent execution track record; high share count reflects low per-share price, not conviction size.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>ESABINDIA</td>
+            <td class="buy">BUY</td>
+            <td class="num">10</td>
+            <td class="num">Rs.5,630.00</td>
+            <td class="num">Rs.56,300</td>
+            <td class="dim reasoning">MNC-backed welding/cutting equipment maker, industrial capex proxy, steady ~11-20% operating margins and a dividend payer. Smaller share count due to high per-share price, same rupee weight as peers.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>VIJAYA</td>
+            <td class="buy">BUY</td>
+            <td class="num">41</td>
+            <td class="num">Rs.1,348.00</td>
+            <td class="num">Rs.55,268</td>
+            <td class="dim reasoning">South India diagnostics chain, EPS and revenue beat this quarter, asset-light expansion model. Priced richly (80x P/E) so kept to a standard-size position.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>ROUTE</td>
+            <td class="buy">BUY</td>
+            <td class="num">104</td>
+            <td class="num">Rs.527.80</td>
+            <td class="num">Rs.54,891</td>
+            <td class="dim reasoning">CPaaS/messaging infra, 13.4x P/E despite a Q1 EPS miss - starting small given the miss, watching next quarter closely before adding.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>JUSTDIAL</td>
+            <td class="buy">BUY</td>
+            <td class="num">80</td>
+            <td class="num">Rs.683.00</td>
+            <td class="num">Rs.54,640</td>
+            <td class="dim reasoning">Local search platform under Reliance Retail control, cheapest name in the basket at 11x P/E with 33% EPS beat and consistent ~35-50% net margins from a largely fixed-cost model.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>HOMEFIRST</td>
+            <td class="buy">BUY</td>
+            <td class="num">46</td>
+            <td class="num">Rs.1,193.00</td>
+            <td class="num">Rs.54,878</td>
+            <td class="dim reasoning">Affordable housing financier, 51%+ net margins, EPS beat, 21.6x P/E. Quality NBFC lending into an underpenetrated segment.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>GALAXYSURF</td>
+            <td class="buy">BUY</td>
+            <td class="num">27</td>
+            <td class="num">Rs.2,067.00</td>
+            <td class="num">Rs.55,809</td>
+            <td class="dim reasoning">Surfactants/personal-care ingredients exporter with blue-chip client base (Unilever, L'Oreal, Colgate). Reasonable 27x P/E for an export-oriented compounder.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>ALKYLAMINE</td>
+            <td class="buy">BUY</td>
+            <td class="num">29</td>
+            <td class="num">Rs.1,893.00</td>
+            <td class="num">Rs.54,897</td>
+            <td class="dim reasoning">Specialty amines producer, Q1 FY27 EPS beat estimate by ~120% on margin recovery after a weak chemicals cycle. Early-cycle turnaround bet in specialty chemicals.</td>
+        </tr><tr>
+            <td class="dim">2026-08-09</td>
+            <td>METROPOLIS</td>
+            <td class="buy">BUY</td>
+            <td class="num">98</td>
+            <td class="num">Rs.562.30</td>
+            <td class="num">Rs.55,105</td>
+            <td class="dim reasoning">Diagnostics chain, Q1 FY27 EPS/revenue beat, steady 12% net margin, low capex-intensity relative to peers. Anchor healthcare position.</td>
+        </tr></tbody>
+    </table>
+  </div>
+
+  <div class="footer-note">
+    Paper trading only, no real orders. Universe: Nifty Microcap 250 proxy (SEBI/AMFI avg market-cap ranks 501-750, Jul-Dec 2024).
+    Prices from Yahoo/Google Finance quote pages, not tick-accurate. Regenerated by scripts/build_dashboard.py.
+  </div>
+</div>
+
+<script>
+const ctx = document.getElementById('navChart');
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: ["2026-08-09"],
+    datasets: [
+      { label: 'Claude Portfolio', data: [1000000.0], borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,0.08)', fill: true, tension: 0.2 },
+      { label: 'Nifty Microcap 250 (rebased)', data: [1000000.0], borderColor: '#9ca3af', borderDash: [5,4], fill: false, tension: 0.2 }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: { y: { ticks: { callback: (v) => 'Rs.' + v.toLocaleString() } } }
+  }
+});
+</script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
+.venv/
+.claude/settings.local.json
 .kite_token.json
 scans/
 .env
