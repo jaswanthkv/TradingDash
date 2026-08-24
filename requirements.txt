@@ -4,12 +4,4 @@ yfinance>=0.2.40
 pandas>=2.2.0
 numpy>=1.26.0
 openpyxl>=3.1.0
-kiteconnect>=5.0.0
 pydantic>=2.0.0
-
-# Kronos forecast (Buy Top 20 confirmation layer) — see vendor/kronos
-torch>=2.0.0
-einops>=0.8.1
-huggingface_hub>=0.33.1
-safetensors>=0.6.2
-tqdm>=4.67.1

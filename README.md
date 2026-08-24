@@ -1,6 +1,6 @@
 # QuantDesk
 
-A self-hosted stock screening and options trading dashboard for Indian (NSE) and US (S&P 500) markets. Built with FastAPI and vanilla JS — no paid data subscriptions required.
+A self-hosted stock screener for Indian (NSE) and US (S&P 500) markets. Built with FastAPI and vanilla JS — no paid data subscriptions required, no broker integration.
 
 ---
 
@@ -13,15 +13,6 @@ A self-hosted stock screening and options trading dashboard for Indian (NSE) and
 - **Column sorting** by RS Rating or Market Cap (asc/desc toggle)
 - **US market** — same criteria against the S&P 500 universe
 - Same-day price cache: first run downloads ~5 years of daily OHLCV, subsequent runs are instant
-- **Buy Top 20** — equal-rupee buy across the top 20 SEPA full-pass stocks by RS Rating; enter a budget, review a live-priced order preview, confirm to place CNC market orders on Kite (India only)
-- **Kronos forecast confirmation** — before buying, each Buy Top 20 candidate is run through [Kronos](https://github.com/shiyu-coder/Kronos), an open-source foundation model for OHLCV forecasting; only candidates where Kronos also predicts an uptrend over the next 10 trading days are bought
-- **Holdings panel** — view current NSE equity holdings with live P&L and sell (full or partial) at market
-
-### Pulse (NIFTY Options Signal)
-- **Live Heikin-Ashi signal** — 30-minute candle HA direction for NIFTY (LONG / SHORT / FLAT)
-- **One-click option sell** — fetches ATM weekly expiry, shows LTP and premium, places NRML order on Kite
-- **Auto-execute mode** — fires 3 minutes after each 30-min candle close during market hours; flips position automatically on signal change
-- Full execution log with timestamps
 
 ---
 
@@ -31,8 +22,7 @@ A self-hosted stock screening and options trading dashboard for Indian (NSE) and
 |---|---|
 | Backend | Python · FastAPI · Uvicorn |
 | Market data | yfinance · NSE CSV universe · SEBI MCap Excel |
-| Broker integration | Zerodha Kite Connect API |
-| Frontend | Vanilla JS · HTML/CSS · Chart.js |
+| Frontend | Vanilla JS · HTML/CSS |
 | Data processing | pandas · NumPy |
 
 ---
@@ -42,14 +32,10 @@ A self-hosted stock screening and options trading dashboard for Indian (NSE) and
 ### 1. Clone and install
 
 ```bash
-git clone --recurse-submodules https://github.com/jaswanthkv/TradingDash.git
+git clone https://github.com/jaswanthkv/TradingDash.git
 cd TradingDash
 pip install -r requirements.txt
 ```
-
-Already cloned without `--recurse-submodules`? Run `git submodule update --init` to pull in `vendor/kronos`.
-
-Note: `torch` + Kronos model weights (~500MB, downloaded from Hugging Face Hub on first forecast) are only needed for the Buy Top 20 confirmation step — the screener and Pulse work without them.
 
 ### 2. Configure
 
@@ -58,15 +44,9 @@ Create a `.env` file:
 ```env
 PORT=8000
 
-# Required only for Pulse (options trading)
-KITE_API_KEY=your_api_key
-KITE_API_SECRET=your_api_secret
-
 # Optional: override the NSE universe CSV
 # UNIVERSE_CSV=~/Downloads/ind_niftytotalmarket_list.csv
 ```
-
-Get a Kite API key at [kite.trade](https://kite.trade). The screener works without it.
 
 ### 3. Run
 
@@ -83,14 +63,9 @@ On first load the screener downloads ~5 years of daily prices for 1,690 NSE stoc
 ## Architecture
 
 ```
-server.py          FastAPI app — screener + pulse endpoints
+server.py          FastAPI app — screener endpoint
 minervini.py       SEPA criteria computation (vectorised pandas)
 strategy.py        Universe loading, price download, MCap data
-trade_live.py      Kite integration — equity buy/sell, holdings (Buy Top 20)
-kronos_forecast.py Kronos foundation-model forecast (Buy Top 20 confirmation layer)
-vendor/kronos/     Kronos model code (git submodule, github.com/shiyu-coder/Kronos)
-pulse_live.py      Kite integration — signal, positions, orders
-kite_auth.py       OAuth flow for Kite Connect
 config.py          Env-based configuration
 mcap_fy25h2.xlsx   NSE official average MCap (Jul–Dec 2025)
 ```

@@ -18,7 +18,3 @@ UNIVERSE_CSV = os.environ.get(
     os.path.expanduser("~/Downloads/ind_niftymicrocap250_list.csv")
 )
 UNIVERSE_CSV_2 = os.environ.get("UNIVERSE_CSV_2", "")
-
-KITE_API_KEY    = os.environ.get("KITE_API_KEY", "")
-KITE_API_SECRET = os.environ.get("KITE_API_SECRET", "")
-KITE_TOKEN_FILE = os.path.join(os.path.dirname(__file__), ".kite_token.json")
