@@ -10,5 +10,6 @@ held_portfolio.json
 .mcp.json
 
 .price_cache/
+portfolio_state.json
 
 .bhavcopy/

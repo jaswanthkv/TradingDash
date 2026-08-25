@@ -5,6 +5,8 @@ Endpoints:
   GET  /                        — dashboard (index.html)
 
   GET  /api/screener            — live SEPA screener (market=india|us, fresh=bool)
+
+  GET  /api/portfolio           — SEPA Top 20 paper-trading journal vs Nifty 50/500/Midcap 150
 """
 import asyncio
 import os
@@ -102,6 +104,34 @@ async def screener(market: str = "india", fresh: bool = True):
 def _benchmark_for(market: str):
     """(yfinance symbol, display label) for a market's benchmark index."""
     return ("^GSPC", "S&P 500") if market == "us" else ("^CRSLDX", "Nifty 500")
+
+
+# ── SEPA Top 20 paper-trading journal ───────────────────────────────────────────
+
+_portfolio_running = False
+
+
+@app.get("/api/portfolio")
+async def portfolio():
+    """Rebalances (weekly, if due) and records today's NAV snapshot on demand —
+    no background thread. Safe to call repeatedly; a no-op after the first
+    successful call on a given trading day."""
+    global _portfolio_running
+    if _portfolio_running:
+        raise HTTPException(409, "Portfolio already updating")
+    import portfolio_tracker as pt
+
+    def _run():
+        global _portfolio_running
+        _portfolio_running = True
+        try:
+            return pt.ensure_today()
+        finally:
+            _portfolio_running = False
+
+    loop = asyncio.get_event_loop()
+    state, prices, day_change = await loop.run_in_executor(_executor, _run)
+    return {**state, "current_prices": prices, "day_change": day_change}
 
 
 @app.get("/", response_class=HTMLResponse)

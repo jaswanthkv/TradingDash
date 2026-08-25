@@ -410,6 +410,7 @@ html{scroll-behavior:smooth}
   </div>
   <nav class="side-nav">
     <button class="tab active" onclick="switchTab('screener',this)"><span class="ti">🔍</span><span class="tl">Screener</span></button>
+    <button class="tab" onclick="switchTab('portfolio',this)"><span class="ti">📈</span><span class="tl">Portfolio</span></button>
   </nav>
   <div class="side-foot">
     <span class="last-upd" id="navUpdated"></span>
@@ -492,6 +493,79 @@ html{scroll-behavior:smooth}
   </div>
 </div>
 
+<!-- ════════════════════ PORTFOLIO TAB ════════════════════ -->
+<div class="tab-pane" id="tab-portfolio">
+  <div class="param-row" style="justify-content:space-between">
+    <span style="font-size:11px;color:var(--t3)" id="pfMeta">SEPA Top 20 · paper-trading journal · weekly rebalance</span>
+    <button class="btn btn-ghost btn-sm" onclick="loadPortfolio()">↺ Refresh</button>
+  </div>
+
+  <div id="pfEmpty" class="page hidden">
+    <div class="empty">
+      <div class="empty-icon">📈</div>
+      <div class="empty-title">No portfolio data</div>
+      <div class="empty-sub">Click Refresh to start the journal.</div>
+    </div>
+  </div>
+
+  <div id="pfLoading" class="page hidden">
+    <div class="empty">
+      <div class="spinner" style="margin:0 auto 12px"></div>
+      <div class="empty-title">Updating…</div>
+      <div class="empty-sub">Screening the Top 20 and pricing benchmarks — first load of the day can take a few minutes.</div>
+    </div>
+  </div>
+
+  <div id="pfResults" class="hidden">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-bottom:1px solid var(--border)">
+      <div style="padding:16px 20px;border-right:1px solid var(--border-inner)">
+        <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Portfolio</div>
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span style="font-size:22px;font-weight:800" id="pfReturn">—</span>
+          <span style="font-size:12px;font-weight:700" id="pfToday"></span>
+        </div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px" id="pfNav">—</div>
+      </div>
+      <div style="padding:16px 20px;border-right:1px solid var(--border-inner)">
+        <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px" class="tt" data-tip="Portfolio return minus Nifty 50 return, same period">vs Nifty 50</div>
+        <div style="font-size:22px;font-weight:800" id="pfAlphaNifty50">—</div>
+      </div>
+      <div style="padding:16px 20px;border-right:1px solid var(--border-inner)">
+        <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px" class="tt" data-tip="Portfolio return minus Nifty 500 return, same period">vs Nifty 500</div>
+        <div style="font-size:22px;font-weight:800" id="pfAlphaNifty500">—</div>
+      </div>
+      <div style="padding:16px 20px">
+        <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px" class="tt" data-tip="Portfolio return minus Nifty Midcap 150 return, same period">vs Midcap 150</div>
+        <div style="font-size:22px;font-weight:800" id="pfAlphaMidcap">—</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap" style="padding:16px 20px">
+      <div id="pfChartNote" class="hidden" style="font-size:11px;color:var(--t3);margin-bottom:8px">
+        Only one trading day recorded so far — the trend line appears once a second day's snapshot is taken. The journal records at most once per trading day, so re-clicking Refresh today won't add a point.
+      </div>
+      <canvas id="pfChart" height="90"></canvas>
+    </div>
+
+    <div class="card" style="margin:0 20px 20px">
+      <div class="card-head"><span class="card-title">Current Holdings</span></div>
+      <div class="tbl-wrap" style="max-height:360px">
+        <table>
+          <thead><tr>
+            <th style="text-align:left">Symbol</th><th>Qty</th><th>Avg Cost</th><th>Price</th><th>Day %</th><th>Weight</th><th>P&amp;L</th>
+          </tr></thead>
+          <tbody id="pfHoldingsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin:0 20px 20px">
+      <div class="card-head"><span class="card-title">Rebalance Log</span></div>
+      <div id="pfRebalanceLog" style="padding:4px 16px 12px;font-size:12px"></div>
+    </div>
+  </div>
+</div>
+
 </main>
 
 <script>
@@ -533,11 +607,20 @@ function switchTab(name, el) {
   history.replaceState(null, '', '#' + name);
 
   if (name === 'screener') loadScreener();
+  else if (name === 'portfolio') loadPortfolio();
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
-const pct  = (v, d=2) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%';
-const clr  = v => v == null ? '' : v >= 0 ? 'g' : 'r';
+const pct  = (v, d=2) => {
+  if (v == null) return '—';
+  const r = Number(v.toFixed(d));
+  return (r > 0 ? '+' : r < 0 ? '-' : '+') + Math.abs(r).toFixed(d) + '%';
+};
+const clr  = v => {
+  if (v == null) return '';
+  const r = Number(v.toFixed(2));
+  return r > 0 ? 'g' : r < 0 ? 'r' : '';
+};
 const fmt  = (v, d=2) => v == null ? '—' : v.toFixed(d);
 const INR  = v => v == null ? '—' : '₹' + v.toLocaleString('en-IN', {maximumFractionDigits:2});
 
@@ -794,6 +877,146 @@ function renderScreen() {
       <td><span class="${r.rs_rating >= 80 ? 'g' : r.rs_rating >= 60 ? '' : 'r'}" style="font-weight:700">${r.rs_rating != null ? r.rs_rating.toFixed(0) : '—'}</span></td>
     </tr>`;
   }).join('');
+}
+
+// ── Portfolio (SEPA Top 20 paper-trading journal) ───────────────────────────────
+let _pfChart = null;
+let _pfLoading = false;
+
+async function loadPortfolio() {
+  if (_pfLoading) return;
+  _pfLoading = true;
+  hide('pfEmpty'); hide('pfResults'); show('pfLoading');
+  try {
+    const res = await fetch(API + '/api/portfolio');
+    if (res.status === 409) {
+      setTimeout(() => { _pfLoading = false; loadPortfolio(); }, 3000);
+      return;
+    }
+    if (!res.ok) throw new Error(await res.text());
+    const d = await res.json();
+    renderPortfolio(d);
+  } catch(e) {
+    hide('pfLoading'); hide('pfResults'); show('pfEmpty');
+    const t = document.querySelector('#pfEmpty .empty-title');
+    const s = document.querySelector('#pfEmpty .empty-sub');
+    if (t) t.textContent = 'Error';
+    if (s) s.textContent = e.message;
+  } finally {
+    _pfLoading = false;
+  }
+}
+
+function renderPortfolio(d) {
+  const hist = d.nav_history || [];
+  if (!hist.length) {
+    hide('pfLoading'); hide('pfResults'); show('pfEmpty');
+    return;
+  }
+  hide('pfLoading'); hide('pfEmpty'); show('pfResults');
+
+  const first = hist[0];
+  const last  = hist[hist.length - 1];
+  const ret   = (last.nav / d.starting_capital - 1) * 100;
+
+  setText('pfReturn', pct(ret));
+  document.getElementById('pfReturn').className = clr(ret);
+  setText('pfNav', `${INR(last.nav)} · since ${d.inception_date || '—'} · as of ${last.date}`);
+
+  const prevNav = hist.length >= 2 ? hist[hist.length - 2].nav : null;
+  const todayEl = document.getElementById('pfToday');
+  if (prevNav) {
+    const todayChg = (last.nav / prevNav - 1) * 100;
+    todayEl.textContent = `Today ${pct(todayChg)}`;
+    todayEl.className = clr(todayChg);
+  } else {
+    todayEl.textContent = '';
+  }
+
+  const benchElId = { nifty50: 'pfAlphaNifty50', nifty500: 'pfAlphaNifty500', midcap150: 'pfAlphaMidcap' };
+  const benchName = { nifty50: 'Nifty 50', nifty500: 'Nifty 500', midcap150: 'Midcap 150' };
+  for (const key of Object.keys(benchElId)) {
+    const el = document.getElementById(benchElId[key]);
+    const f = first[key], l = last[key];
+    if (f == null || l == null) { el.textContent = '—'; continue; }
+    const benchRet = (l / f - 1) * 100;
+    const alpha = ret - benchRet;
+    el.textContent = pct(alpha);
+    el.className = clr(alpha);
+    el.title = `Portfolio ${pct(ret)} vs ${benchName[key]} ${pct(benchRet)}`;
+  }
+
+  // Equity curve — index every series to 100 at the first snapshot so they're comparable.
+  const pfChartNote = document.getElementById('pfChartNote');
+  if (pfChartNote) pfChartNote.classList.toggle('hidden', hist.length > 1);
+
+  const labels = hist.map(h => h.date);
+  const idxSeries = key => {
+    const base = hist.find(h => h[key] != null)?.[key];
+    if (!base) return hist.map(() => null);
+    return hist.map(h => h[key] != null ? +(h[key] / base * 100).toFixed(2) : null);
+  };
+  const series = {
+    Portfolio:    hist.map(h => +(h.nav / d.starting_capital * 100).toFixed(2)),
+    'Nifty 50':   idxSeries('nifty50'),
+    'Nifty 500':  idxSeries('nifty500'),
+    'Midcap 150': idxSeries('midcap150'),
+  };
+  const seriesColor = { Portfolio: '#6366f1', 'Nifty 50': '#16a34a', 'Nifty 500': '#f59e0b', 'Midcap 150': '#dc2626' };
+
+  const cc = chartColors();
+  if (_pfChart) { _pfChart.destroy(); _pfChart = null; }
+  _pfChart = new Chart(document.getElementById('pfChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: Object.entries(series).map(([name, data]) => ({
+        label: name, data, borderColor: seriesColor[name], backgroundColor: 'transparent',
+        borderWidth: name === 'Portfolio' ? 2.5 : 1.5,
+        pointRadius: labels.length > 1 ? 0 : 3, tension: 0.15,
+      })),
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: cc.t2, boxWidth: 12, font: { size: 11 } } } },
+      scales: {
+        x: { grid: { color: cc.grid }, ticks: { color: cc.tick, font: { size: 10 }, maxTicksLimit: 8 } },
+        y: { grid: { color: cc.grid }, ticks: { color: cc.tick, font: { size: 10 } } },
+      },
+    },
+  });
+
+  // Holdings table
+  const prices = d.current_prices || {};
+  const dayChange = d.day_change || {};
+  const rows = Object.entries(d.holdings || {});
+  document.getElementById('pfHoldingsBody').innerHTML = rows.length ? rows.map(([sym, pos]) => {
+    const px = prices[sym];
+    const val = px != null ? pos.qty * px : null;
+    const weight = val != null && last.nav ? (val / last.nav * 100) : null;
+    const pnl = px != null ? (px / pos.avg_cost - 1) * 100 : null;
+    const dayChg = dayChange[sym] ?? null;
+    return `<tr>
+      <td style="text-align:left;font-weight:700">${sym}</td>
+      <td>${pos.qty}</td>
+      <td>${INR(pos.avg_cost)}</td>
+      <td>${px != null ? INR(px) : '—'}</td>
+      <td class="${clr(dayChg)}">${pct(dayChg)}</td>
+      <td>${weight != null ? weight.toFixed(1) + '%' : '—'}</td>
+      <td class="${clr(pnl)}">${pct(pnl)}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:16px">No holdings yet</td></tr>`;
+
+  // Rebalance log, most recent first
+  const log = (d.rebalance_log || []).slice().reverse();
+  document.getElementById('pfRebalanceLog').innerHTML = log.length ? log.map(r => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--border-inner)">
+      <div style="font-weight:700;margin-bottom:4px">${r.date}</div>
+      ${r.added.length ? `<span style="color:var(--green);font-size:11px">+ ${r.added.join(', ')}</span><br>` : ''}
+      ${r.removed.length ? `<span style="color:var(--red);font-size:11px">− ${r.removed.join(', ')}</span>` : ''}
+      ${!r.added.length && !r.removed.length ? '<span style="color:var(--t3);font-size:11px">No changes</span>' : ''}
+    </div>`).join('') : `<div style="color:var(--t3);padding:8px 0">No rebalances yet.</div>`;
 }
 
 // ── Dark mode ─────────────────────────────────────────────────────────────────
