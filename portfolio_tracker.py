@@ -29,7 +29,7 @@ STATE_FILE       = os.path.join(os.path.dirname(__file__), "portfolio_state.json
 STARTING_CAPITAL = 1_000_000.0
 TOP_N            = 20
 
-BENCHMARKS = {
+PORTFOLIO_BENCHMARKS = {
     "nifty50":   "^NSEI",
     "nifty500":  "^CRSLDX",
     "midcap150": "NIFTYMIDCAP150.NS",
@@ -64,11 +64,11 @@ def save_state(state: dict) -> None:
 
 # ── Selection (mirrors the removed Buy Top 20 rule) ─────────────────────────
 
-def _compute_top20() -> list[str]:
+def _compute_top20(get_prices=None) -> list[str]:
     """SEPA full-pass NSE stocks (≥500 Cr), ranked by RS Rating, top 20."""
     import minervini as mv
 
-    rows = mv.screen_market("india", use_cache=True)["rows"]
+    rows = mv.screen_market("india", use_cache=True, get_prices=get_prices)["rows"]
     candidates = [r for r in rows if r.get("sepa_pass") and r.get("rs_rating") is not None]
     candidates.sort(key=lambda r: r["rs_rating"], reverse=True)
     return [r["symbol"] for r in candidates[:TOP_N]]
@@ -76,14 +76,18 @@ def _compute_top20() -> list[str]:
 
 # ── Prices ───────────────────────────────────────────────────────────────────
 
-def _get_current_prices(symbols: list[str]):
+def _get_current_prices(symbols: list[str], get_prices=None):
     """Latest close for each bare NSE symbol + the 3 benchmarks, the trading-day
     date implied by that data (so weekend page-loads don't create a duplicate
     snapshot), and each ticker's day-over-day % change vs the previous close —
-    already in the downloaded frame, so this costs nothing extra to fetch."""
-    tickers = sorted({f"{s}.NS" for s in symbols} | set(BENCHMARKS.values()))
-    close, _ = st.download_data(
-        tickers, years=1, benchmark=BENCHMARKS["nifty500"], use_cache=True)
+    already in the downloaded frame, so this costs nothing extra to fetch.
+
+    `get_prices` overrides the price-fetch call — pass a fake in tests instead
+    of hitting yfinance. Defaults to strategy.download_data."""
+    get_prices = get_prices or st.download_data
+    tickers = sorted({f"{s}.NS" for s in symbols} | set(PORTFOLIO_BENCHMARKS.values()))
+    close, _ = get_prices(
+        tickers, years=1, benchmark=PORTFOLIO_BENCHMARKS["nifty500"], use_cache=True)
     if close.empty:
         raise RuntimeError("No price data returned for portfolio tracking")
     # yfinance occasionally drops an isolated bar for a thin-liquidity stock (a
@@ -105,7 +109,7 @@ def _get_current_prices(symbols: list[str]):
 
     prices = {s: float(last[f"{s}.NS"]) for s in symbols
               if f"{s}.NS" in last.index and pd.notna(last[f"{s}.NS"])}
-    bench  = {name: float(last[ticker]) for name, ticker in BENCHMARKS.items()
+    bench  = {name: float(last[ticker]) for name, ticker in PORTFOLIO_BENCHMARKS.items()
               if ticker in last.index and pd.notna(last[ticker])}
 
     day_change: dict[str, float] = {}
@@ -113,7 +117,7 @@ def _get_current_prices(symbols: list[str]):
         chg = _day_change(f"{s}.NS")
         if chg is not None:
             day_change[s] = chg
-    for name, ticker in BENCHMARKS.items():
+    for name, ticker in PORTFOLIO_BENCHMARKS.items():
         chg = _day_change(ticker)
         if chg is not None:
             day_change[name] = chg

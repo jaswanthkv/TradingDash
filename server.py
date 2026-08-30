@@ -15,9 +15,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 warnings.filterwarnings("ignore")
 
-import pandas as pd
-from datetime import date
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -51,8 +48,9 @@ async def screener(market: str = "india", fresh: bool = True):
     if _screener_running[market]:
         raise HTTPException(409, "Screener already refreshing for this market")
     import minervini as mv
+    import strategy as st
 
-    _, bench_label = _benchmark_for(market)
+    bench_label = st.BENCHMARK_LABELS.get(market, "Nifty 500")
 
     def _run():
         _screener_running[market] = True
@@ -78,11 +76,6 @@ async def screener(market: str = "india", fresh: bool = True):
         "missing":         result["missing"],
         "missing_count":   len(result["missing"]),
     }
-
-
-def _benchmark_for(market: str):
-    """(yfinance symbol, display label) for a market's benchmark index."""
-    return ("^GSPC", "S&P 500") if market == "us" else ("^CRSLDX", "Nifty 500")
 
 
 # ── SEPA Top 20 paper-trading journal ───────────────────────────────────────────

@@ -1,14 +1,9 @@
 """
-strategy.py — Vectorized ML multi-factor stock ranking engine.
+strategy.py — universe loading and cached price download for the SEPA screener.
 
-Factors (cross-sectional percentile ranks, 0–100):
-  mom_12_1  : 12-month return skipping last month  [25%]
-  mom_6_1   : 6-month return skipping last month   [20%]
-  rs_nifty  : 3-month excess return vs Nifty 50    [20%]
-  trend     : EMA/SMA alignment score 0–4          [15%]
-  sharpe_3m : 63-day rolling Sharpe ratio          [10%]
-  vol_exp   : volume expansion 5d / 60d avg        [ 5%]
-  inv_vol   : negative 20-day realized volatility  [ 5%]
+Loads the NSE/S&P 500 stock universe (from the MCap Excel file or index CSVs)
+and downloads OHLCV history via yfinance, with a same-day on-disk cache so
+repeated screener/portfolio calls don't re-hit the network.
 """
 import warnings; warnings.filterwarnings("ignore")
 import csv
@@ -24,30 +19,8 @@ from datetime import date, timedelta
 from config import UNIVERSE_CSV, UNIVERSE_CSV_2
 
 BENCHMARK = "^CRSLDX"
-BENCHMARKS = {"india": "^CRSLDX", "us": "^GSPC"}   # per-market index
-RISK_FREE  = 0.06      # 6% annualised (India)
-TOP_N      = 20
-MIN_BARS   = 274       # 252 + 22 needed for mom_12_1
-
-WEIGHTS = {
-    "mom_12_1": 0.25,
-    "mom_6_1":  0.20,
-    "rs_nifty": 0.20,
-    "trend":    0.15,
-    "sharpe_3m":0.10,
-    "vol_exp":  0.05,
-    "inv_vol":  0.05,
-}
-
-FACTOR_LABELS = {
-    "mom_12_1":  "12M Mom",
-    "mom_6_1":   "6M Mom",
-    "rs_nifty":  "RS vs Nifty",
-    "trend":     "Trend",
-    "sharpe_3m": "Sharpe 3M",
-    "vol_exp":   "Vol Exp",
-    "inv_vol":   "Low Vol",
-}
+BENCHMARKS = {"india": "^CRSLDX", "us": "^GSPC"}   # per-market index -> yfinance symbol
+BENCHMARK_LABELS = {"india": "Nifty 500", "us": "S&P 500"}   # per-market -> display label
 
 # Nifty 100 fallback when universe CSV is absent
 _NIFTY100 = [

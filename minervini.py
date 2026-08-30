@@ -1,7 +1,7 @@
 """
-minervini.py — Mark Minervini SEPA strategy backtest + screener.
+minervini.py — Mark Minervini SEPA trend-template screener.
 
-SEPA Criteria (all 9 must pass to qualify):
+SEPA Criteria (all 10 must pass to qualify):
   1. Price > 150-day SMA
   2. Price > 200-day SMA
   3. 150-day SMA > 200-day SMA
@@ -11,37 +11,19 @@ SEPA Criteria (all 9 must pass to qualify):
   7. Price > 50-day SMA
   8. Price within 25% of 52-week high
   9. Price at least 30% above 52-week low
+  10. RS Rating >= 70
 
 Ranking: RS Rating — cross-sectional percentile rank of 12-month return (0–99)
-Portfolio: top-N qualifying stocks ranked by RS Rating, equal-weight, monthly rebalance
 """
 import warnings; warnings.filterwarnings("ignore")
-import calendar
-import math
 import numpy as np
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 
 import strategy as st
 
 
-def last_business_day(year: int, month: int) -> date:
-    """Last Mon–Fri calendar day of the month (ignores exchange holidays)."""
-    d = date(year, month, calendar.monthrange(year, month)[1])
-    while d.weekday() >= 5:
-        d -= timedelta(days=1)
-    return d
-
-
-def current_month_complete(today: date | None = None) -> bool:
-    """True once we're at/after the month's last business day — the monthly
-    rebalance boundary — so the month counts as a finished period."""
-    today = today or date.today()
-    return today >= last_business_day(today.year, today.month)
-
 BENCHMARK = st.BENCHMARK
-RISK_FREE  = st.RISK_FREE
-MIN_BARS   = 280   # 252 (52w) + 28 buffer for SMA200 slope
 
 CRITERIA_LABELS = {
     "c1": "Price > 150d SMA",
@@ -129,297 +111,6 @@ def compute_sepa(close: pd.DataFrame,
     }
 
 
-# ── Performance metrics ───────────────────────────────────────────────────────
-
-def _cagr(ret: pd.Series) -> float:
-    if len(ret) == 0: return 0.0
-    n_y = len(ret) / 12
-    return float((1 + ret).prod() ** (1 / n_y) - 1) if n_y > 0 else 0.0
-
-def _sharpe(ret: pd.Series) -> float:
-    mrf = (1 + RISK_FREE) ** (1/12) - 1
-    exc = ret - mrf
-    return float(exc.mean() / exc.std() * math.sqrt(12)) if exc.std() > 0 else 0.0
-
-def _sortino(ret: pd.Series) -> float:
-    mrf  = (1 + RISK_FREE) ** (1/12) - 1
-    exc  = ret - mrf
-    dstd = exc[exc < 0].std()
-    return float(exc.mean() / dstd * math.sqrt(12)) if dstd and dstd > 0 else 0.0
-
-def _max_dd(ret: pd.Series) -> float:
-    wealth = (1 + ret).cumprod()
-    dd = (wealth - wealth.cummax()) / wealth.cummax()
-    return float(dd.min())
-
-def _kpis(ret: pd.Series, label: str) -> dict:
-    c = _cagr(ret) * 100
-    d = _max_dd(ret) * 100
-    return {
-        "label":            label,
-        "cagr_pct":         round(c, 2),
-        "sharpe":           round(_sharpe(ret), 2),
-        "sortino":          round(_sortino(ret), 2),
-        "max_dd_pct":       round(d, 2),
-        "calmar":           round(abs(c / d) if d else 0, 2),
-        "win_rate_pct":     round(float((ret > 0).mean() * 100) if len(ret) else 0.0, 1),
-        "total_months":     int(len(ret)),
-        "total_return_pct": round(float((1 + ret).prod() - 1) * 100, 2),
-    }
-
-def _monthly_grid(ret: pd.Series) -> list:
-    months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-    df = ret.copy(); df.index = pd.to_datetime(df.index)
-    rows = []
-    for yr in sorted(df.index.year.unique()):
-        yr_d = df[df.index.year == yr]
-        row = {"year": int(yr)}
-        for mi, mon in enumerate(months, 1):
-            mo_d = yr_d[yr_d.index.month == mi]
-            row[mon] = round(float(mo_d.iloc[-1]) * 100, 2) if len(mo_d) else None
-        # Annual = simple sum of the monthly returns shown (per user preference).
-        # NOTE: this is NOT compounded, so it differs from the CAGR / Total Return
-        # KPIs, which remain correctly compounded.
-        row["Annual"] = round(sum(v for m in months if (v := row[m]) is not None), 2)
-        rows.append(row)
-    return rows
-
-
-# ── Main backtest ─────────────────────────────────────────────────────────────
-
-def run_backtest(
-    years:    int   = 5,
-    top_n:    int   = 20,
-    capital:  float = 500_000,
-    cost_bps: float = 20,
-    progress_cb=None,
-    market:   str   = "india",
-    held_current: list | None = None,
-    held_month:   str  | None = None,
-) -> dict:
-    # held_current / held_month: the portfolio you actually hold and the month
-    # (YYYY-MM) it represents. For that month the backtest reports YOUR holdings
-    # and their realised return — matching the live Portfolio tab — instead of
-    # the model's fresh top-N picks.
-    def _prog(step, total, msg):
-        if progress_cb: progress_cb(step, total, msg)
-
-    benchmark   = st.BENCHMARKS.get(market, BENCHMARK)
-    bench_label = "S&P 500 Buy & Hold" if market == "us" else "Nifty 500 Buy & Hold"
-
-    _prog(1, 5, "Loading universe …")
-    tickers = st.load_universe(market)
-
-    _prog(2, 5, f"Downloading {len(tickers)} tickers ({years}y daily) …")
-    def _dl_prog(done, total, msg):
-        # Map batch progress into the slice between step 2 and step 3 so the
-        # bar visibly advances during the (long) download instead of freezing.
-        _prog(2 + (done / total) * 0.9 if total else 2, 5, msg)
-    # Always pull fresh, real prices — never read the same-day pickle cache — so
-    # the backtest reflects live data (and picks up any backfilled bars).
-    close, _, high, low = st.download_data(tickers, years=years, include_hl=True,
-                                           benchmark=benchmark, progress_cb=_dl_prog,
-                                           use_cache=False)
-
-    _prog(3, 5, "Computing SEPA criteria …")
-    sepa   = compute_sepa(close, high, low, benchmark=benchmark)
-    stocks = [c for c in close.columns if c != benchmark]
-
-    # Rebalance dates: first trading day each month after warmup
-    warmup_end = close.index[0] + pd.DateOffset(days=int(MIN_BARS * 365 / 252) + 30)
-    td_after   = close.index[close.index > warmup_end]
-    if td_after.empty:
-        raise ValueError("Not enough history for SEPA warmup.")
-
-    td_df = pd.DataFrame({"date": td_after})
-    td_df["ym"] = td_df["date"].dt.to_period("M")
-    rebalance_dates = list(td_df.groupby("ym")["date"].first().values)
-
-    _prog(4, 5, f"Walk-forward simulation: {len(rebalance_dates)} months …")
-
-    port_returns: dict  = {}   # MODEL returns → KPIs, curve (excludes live month)
-    bench_returns: dict = {}
-    disp_returns: dict  = {}   # what the heatmap shows (may include the held month)
-    disp_bench:   dict  = {}
-    rebalance_log: list = []
-    prev_portfolio: list = []
-
-    # Clean benchmark series (drop NaN bars) — the Nifty 500 index has data gaps
-    # on some dates; .asof() then gives the last valid close on/before any date.
-    bench_series = (close[benchmark].dropna()
-                    if benchmark in close.columns else pd.Series(dtype=float))
-
-    for i, rd in enumerate(rebalance_dates):
-        rd_ts   = pd.Timestamp(rd)
-        next_rd = (pd.Timestamp(rebalance_dates[i + 1])
-                   if i < len(rebalance_dates) - 1
-                   else pd.Timestamp(date.today()))
-
-        # Screen on the last close STRICTLY BEFORE the rebalance date — you form
-        # the portfolio at the start of the rebalance day using prior-session data,
-        # so using the rebalance day's own close would be look-ahead bias.
-        avail = close.index[close.index < rd_ts]
-        if avail.empty:
-            continue
-        dt = avail[-1]
-
-        if dt not in sepa["sepa_pass"].index:
-            continue
-
-        pass_row = sepa["sepa_pass"].loc[dt]
-        rs_row   = sepa["rs_rating"].loc[dt]
-
-        # Stocks passing all 9 SEPA criteria with valid RS
-        passing = [
-            t for t in stocks
-            if t in pass_row.index and bool(pass_row.get(t))
-            and t in rs_row.index  and pd.notna(rs_row.get(t))
-        ]
-
-        if not passing:
-            prev_portfolio = []
-            rebalance_log.append({
-                "date": rd_ts.strftime("%Y-%m"),
-                "holdings": [], "added": [], "removed": prev_portfolio[:],
-                "qualifying": 0, "turnover_pct": 0,
-                "period_ret_pct": 0.0, "bench_ret_pct": 0.0, "top5": [],
-            })
-            prev_portfolio = []
-            continue
-
-        # Rank by RS Rating descending
-        portfolio = list(rs_row[passing].sort_values(ascending=False).head(top_n).index)
-
-        # For the month you actually hold, report YOUR real holdings and their
-        # return (the locked snapshot) — not the model's fresh top-N — so the row
-        # matches the live Portfolio tab. No turnover cost: you're holding, not
-        # churning, and the live tab shows the gross figure.
-        held_row = bool(held_current) and rd_ts.strftime("%Y-%m") == held_month
-        if held_row:
-            portfolio = [t for t in held_current if t in stocks]
-
-        added    = [t for t in portfolio if t not in prev_portfolio]
-        removed  = [t for t in prev_portfolio if t not in portfolio]
-        turnover = len(added) / max(len(portfolio), 1)
-        cost     = 0.0 if held_row else turnover * (cost_bps / 10_000) * 2
-
-        idx_gte_rd   = close.index[close.index >= rd_ts]
-        idx_gte_next = close.index[close.index >= next_rd]
-        if idx_gte_rd.empty:
-            prev_portfolio = portfolio[:]
-            continue
-        entry_date = idx_gte_rd[0]
-        exit_date  = idx_gte_next[0] if not idx_gte_next.empty else close.index[-1]
-        entry_row  = close.loc[entry_date]
-        exit_row   = close.loc[exit_date]
-
-        valid = [
-            t for t in portfolio
-            if t in close.columns
-            and pd.notna(entry_row.get(t)) and pd.notna(exit_row.get(t))
-            and entry_row[t] > 0
-        ]
-        if not valid:
-            prev_portfolio = portfolio[:]
-            continue
-
-        ind_rets     = (exit_row[valid] / entry_row[valid]) - 1
-        port_monthly = float(ind_rets.mean()) - cost
-
-        # Benchmark return via nearest valid close on/before entry & exit dates
-        # (handles ^CRSLDX gaps that previously zeroed out the benchmark).
-        bench_monthly = 0.0
-        if not bench_series.empty:
-            b_entry = bench_series.asof(entry_date)
-            b_exit  = bench_series.asof(exit_date)
-            if pd.notna(b_entry) and pd.notna(b_exit) and b_entry > 0 \
-               and math.isfinite(b_exit / b_entry):
-                bench_monthly = float(b_exit / b_entry - 1)
-
-        label = rd_ts.strftime("%Y-%m")
-        is_current = label == date.today().strftime("%Y-%m")
-
-        # KPIs / curve use the MODEL track and EXCLUDE the live current month and
-        # any discretionary held month, so neither an in-progress month nor your
-        # hand-picked holdings distort CAGR / Sharpe / total return.
-        if not (is_current or held_row):
-            port_returns[label]  = port_monthly
-            bench_returns[label] = bench_monthly
-
-        # Display (heatmap + history row): show the current month only when it
-        # carries a real figure — your held portfolio's MTD return, or the model's
-        # once the month has fully elapsed. Otherwise hide the partial month.
-        shown = (not is_current) or held_row or current_month_complete()
-        if shown:
-            disp_returns[label] = port_monthly
-            disp_bench[label]   = bench_monthly
-
-        top5 = [{"ticker": t, "rs_rating": round(float(rs_row[t]), 1)}
-                for t in portfolio[:5] if t in rs_row.index]
-
-        rebalance_log.append({
-            "date":           label,
-            "holdings":       portfolio[:],
-            "added":          added,
-            "removed":        removed,
-            "qualifying":     len(passing),
-            "turnover_pct":   round(turnover * 100, 1),
-            "period_ret_pct": round(port_monthly * 100, 2)  if shown else None,
-            "bench_ret_pct":  round(bench_monthly * 100, 2) if shown else None,
-            "is_held_month":  bool(held_row),
-            "top5":           top5,
-        })
-        prev_portfolio = portfolio[:]
-
-    _prog(5, 5, "Computing performance metrics …")
-
-    strat_r = pd.Series(port_returns)
-    bench_r = pd.Series(bench_returns).reindex(strat_r.index).fillna(0)
-
-    strat_kpi = _kpis(strat_r, f"Minervini SEPA Top-{top_n}")
-    bench_kpi = _kpis(bench_r, bench_label)
-    strat_kpi["alpha_pct"] = round(strat_kpi["cagr_pct"] - bench_kpi["cagr_pct"], 2)
-
-    strat_curve = (1 + strat_r).cumprod()
-    bench_curve = (1 + bench_r).cumprod()
-
-    current_screen = screen_on_date(sepa, close, pd.Timestamp(date.today()), stocks)
-
-    def _safe(v):
-        if isinstance(v, (float, np.floating)):
-            if not math.isfinite(v): return None
-            return round(float(v), 4)
-        if isinstance(v, (bool, np.bool_)): return bool(v)
-        if isinstance(v, (int, np.integer)): return int(v)
-        return v
-
-    def _san(obj):
-        if isinstance(obj, dict): return {k: _san(v) for k, v in obj.items()}
-        if isinstance(obj, list): return [_san(i) for i in obj]
-        return _safe(obj) if isinstance(obj, (float, np.floating)) else obj
-
-    result = {
-        "params": {
-            "years": years, "top_n": top_n,
-            "cost_bps": cost_bps, "universe_size": len(stocks),
-            "market": market, "benchmark_label": bench_label.replace(" Buy & Hold", ""),
-        },
-        "strategy_kpi":      strat_kpi,
-        "benchmark_kpi":     bench_kpi,
-        "dates":             list(strat_r.index),
-        "strategy_curve":    [round(float(v), 4) for v in strat_curve],
-        "benchmark_curve":   [round(float(v), 4) for v in bench_curve],
-        "monthly_returns":   _monthly_grid(pd.Series(disp_returns)),
-        "monthly_bench":     _monthly_grid(pd.Series(disp_bench)),
-        "rebalance_history": rebalance_log,
-        "current_screen":    current_screen,
-        "criteria_labels":   CRITERIA_LABELS,
-        "criteria_short":    CRITERIA_SHORT,
-        "run_at": pd.Timestamp.now().isoformat(timespec="seconds"),
-    }
-    return _san(result)
-
-
 # ── Live screener ─────────────────────────────────────────────────────────────
 
 def screen_on_date(sepa: dict, close: pd.DataFrame, ref_date: pd.Timestamp,
@@ -493,20 +184,25 @@ def screen_on_date(sepa: dict, close: pd.DataFrame, ref_date: pd.Timestamp,
     return rows
 
 
-def screen_market(market: str, use_cache: bool = True) -> dict:
+def screen_market(market: str, use_cache: bool = True, get_prices=None) -> dict:
     """Screen `market`'s universe for SEPA trend-template passes as of today's
     close. Attaches company name and market cap to every row.
+
+    `get_prices` overrides the price-fetch call (same signature as
+    strategy.download_data) — pass a fake in tests instead of hitting yfinance.
+    Defaults to strategy.download_data.
 
     Returns {'rows': [...], 'as_of': str, 'requested': int, 'missing': list[str]}.
     `missing` lists universe tickers that never came back from the price
     download, so a silently shrunk universe is visible, not hidden."""
+    get_prices = get_prices or st.download_data
     benchmark = st.BENCHMARKS.get(market, st.BENCHMARK)
     # India uses the MCAP file as universe (covers all NSE stocks ≥ 500 Cr) so the
     # 1000–10000 Cr filter has the full population to work with. Standard index
     # CSVs (Nifty 500, Total Market) miss most small-cap stocks.
     tickers = st.load_universe_from_mcap(min_cr=500) if market == "india" \
               else st.load_universe(market)
-    close, _, high, low = st.download_data(
+    close, _, high, low = get_prices(
         tickers, years=5, include_hl=True, benchmark=benchmark, use_cache=use_cache)
     sepa   = compute_sepa(close, high, low, benchmark=benchmark)
     stocks = [c for c in close.columns if c != benchmark]

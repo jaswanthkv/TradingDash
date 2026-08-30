@@ -485,7 +485,7 @@ html{scroll-behavior:smooth}
           <th>21 Day EMA</th><th>% Var</th>
           <th>50 Day SMA</th><th>% Var</th>
           <th>200 Day SMA</th><th>% Var</th>
-          <th class="tt" data-tip="RS Rating: percentile rank of 12-month return (0–99)" onclick="setScrSort('rs')" style="cursor:pointer;user-select:none">RS</th>
+          <th id="screenRsHdr" class="tt" data-tip="RS Rating: percentile rank of 12-month return (0–99)" onclick="setScrSort('rs')" style="cursor:pointer;user-select:none">RS</th>
         </tr></thead>
         <tbody id="screenBody"></tbody>
       </table>
@@ -807,16 +807,9 @@ function renderScreen() {
   });
   document.querySelectorAll('#screenTable thead th').forEach(th => th.classList.remove('sort-asc','sort-desc'));
   if (_scrSortCol) {
-    const hdrId = _scrSortCol === 'mcap' ? 'screenMcapHdr' : null;
-    if (hdrId) {
-      const el = document.getElementById(hdrId);
-      if (el) el.classList.add(_scrSortDir === 'desc' ? 'sort-desc' : 'sort-asc');
-    } else {
-      // RS is the last th — find it by position
-      const ths = document.querySelectorAll('#screenTable thead th');
-      const rsHdr = ths[ths.length - 1];
-      if (rsHdr) rsHdr.classList.add(_scrSortDir === 'desc' ? 'sort-desc' : 'sort-asc');
-    }
+    const hdrId = _scrSortCol === 'mcap' ? 'screenMcapHdr' : 'screenRsHdr';
+    const el = document.getElementById(hdrId);
+    if (el) el.classList.add(_scrSortDir === 'desc' ? 'sort-desc' : 'sort-asc');
   }
 
   const miss = _scrMeta.missing_count || 0;
