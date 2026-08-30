@@ -68,14 +68,7 @@ def _compute_top20() -> list[str]:
     """SEPA full-pass NSE stocks (≥500 Cr), ranked by RS Rating, top 20."""
     import minervini as mv
 
-    tickers = st.load_universe_from_mcap(min_cr=500)
-    benchmark = st.BENCHMARKS["india"]
-    close, _, high, low = st.download_data(
-        tickers, years=5, include_hl=True, benchmark=benchmark, use_cache=True)
-    sepa   = mv.compute_sepa(close, high, low, benchmark=benchmark)
-    stocks = [c for c in close.columns if c != benchmark]
-    rows   = mv.screen_on_date(sepa, close, pd.Timestamp(date.today()), stocks)
-
+    rows = mv.screen_market("india", use_cache=True)["rows"]
     candidates = [r for r in rows if r.get("sepa_pass") and r.get("rs_rating") is not None]
     candidates.sort(key=lambda r: r["rs_rating"], reverse=True)
     return [r["symbol"] for r in candidates[:TOP_N]]

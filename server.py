@@ -51,53 +51,32 @@ async def screener(market: str = "india", fresh: bool = True):
     if _screener_running[market]:
         raise HTTPException(409, "Screener already refreshing for this market")
     import minervini as mv
-    import strategy as st
 
-    benchmark = st.BENCHMARKS.get(market, st.BENCHMARK)
     _, bench_label = _benchmark_for(market)
 
     def _run():
         _screener_running[market] = True
         try:
-            # India screener uses the MCAP file as universe (covers all NSE stocks
-            # ≥ 500 Cr) so the 1000–10000 Cr filter has the full population to work with.
-            # Standard index CSVs (Nifty 500, Total Market) miss most small-cap stocks.
-            tickers = st.load_universe_from_mcap(min_cr=500) if market == "india" \
-                      else st.load_universe(market)
-            # 5y window matches the backtest's cache key, so the screener reuses
-            # the same-day price cache (instant) instead of re-downloading.
-            close, _, high, low = st.download_data(
-                tickers, years=5, include_hl=True, benchmark=benchmark,
-                use_cache=not fresh)
-            sepa   = mv.compute_sepa(close, high, low, benchmark=benchmark)
-            stocks = [c for c in close.columns if c != benchmark]
-            rows   = mv.screen_on_date(sepa, close, pd.Timestamp(date.today()), stocks)
-            names = st.load_universe_names(market)
-            caps  = st.load_market_caps() if market == "india" else {}
-            for r in rows:
-                r["name"]       = names.get(r["symbol"], "")
-                r["market_cap"] = caps.get(r["symbol"])
-            as_of   = str(close.index[-1].date()) if len(close.index) else ""
-            # Universe tickers that never came back from the price download — so a
-            # silently shrunk universe (yfinance batch failure) is visible, not hidden.
-            missing = [t.replace(".NS", "") for t in tickers if t not in close.columns]
-            return rows, as_of, len(tickers), missing
+            return mv.screen_market(market, use_cache=not fresh)
         finally:
             _screener_running[market] = False
 
     loop = asyncio.get_event_loop()
-    rows, as_of, requested, missing = await loop.run_in_executor(_executor, _run)
+    result = await loop.run_in_executor(_executor, _run)
+    rows = result["rows"]
     return {
         "market":          market,
         "benchmark_label": bench_label,
-        "as_of":           as_of,
+        "as_of":           result["as_of"],
         "rows":            rows,
+        "criteria_short":  mv.CRITERIA_SHORT,
+        "criteria_labels": mv.CRITERIA_LABELS,
         "full_pass":       sum(1 for r in rows if r.get("sepa_pass")),
         "universe":        len(rows),
-        "requested":       requested,
+        "requested":       result["requested"],
         "screened":        len(rows),
-        "missing":         missing,
-        "missing_count":   len(missing),
+        "missing":         result["missing"],
+        "missing_count":   len(result["missing"]),
     }
 
 

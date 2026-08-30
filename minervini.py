@@ -491,3 +491,33 @@ def screen_on_date(sepa: dict, close: pd.DataFrame, ref_date: pd.Timestamp,
 
     rows.sort(key=lambda r: (-r["passing"], -(r["rs_rating"] or 0)))
     return rows
+
+
+def screen_market(market: str, use_cache: bool = True) -> dict:
+    """Screen `market`'s universe for SEPA trend-template passes as of today's
+    close. Attaches company name and market cap to every row.
+
+    Returns {'rows': [...], 'as_of': str, 'requested': int, 'missing': list[str]}.
+    `missing` lists universe tickers that never came back from the price
+    download, so a silently shrunk universe is visible, not hidden."""
+    benchmark = st.BENCHMARKS.get(market, st.BENCHMARK)
+    # India uses the MCAP file as universe (covers all NSE stocks ≥ 500 Cr) so the
+    # 1000–10000 Cr filter has the full population to work with. Standard index
+    # CSVs (Nifty 500, Total Market) miss most small-cap stocks.
+    tickers = st.load_universe_from_mcap(min_cr=500) if market == "india" \
+              else st.load_universe(market)
+    close, _, high, low = st.download_data(
+        tickers, years=5, include_hl=True, benchmark=benchmark, use_cache=use_cache)
+    sepa   = compute_sepa(close, high, low, benchmark=benchmark)
+    stocks = [c for c in close.columns if c != benchmark]
+    rows   = screen_on_date(sepa, close, pd.Timestamp(date.today()), stocks)
+
+    names = st.load_universe_names(market)
+    caps  = st.load_market_caps() if market == "india" else {}
+    for r in rows:
+        r["name"]       = names.get(r["symbol"], "")
+        r["market_cap"] = caps.get(r["symbol"])
+
+    as_of   = str(close.index[-1].date()) if len(close.index) else ""
+    missing = [t.replace(".NS", "") for t in tickers if t not in close.columns]
+    return {"rows": rows, "as_of": as_of, "requested": len(tickers), "missing": missing}

@@ -724,13 +724,14 @@ function renderBreadth() {
 function downloadScreenerCSV() {
   if (!_screenData.length) { alert('No screener data — load the screen first.'); return; }
   const ccy = _scrMarket === 'us' ? 'USD' : 'INR';
-  const criteriaKeys = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10'];
+  const criteriaShort = _scrMeta.criteria_short || {};
+  const criteriaKeys = Object.keys(criteriaShort);
   const headers = [
     'Symbol','Name',`Price (${ccy})`,'RS Rating',
     'EMA 9','EMA 21','SMA 50','SMA 150','SMA 200',
     '52w High','52w Low','% from 52w High','% above 52w Low',
     'Criteria Pass','SEPA Pass (10/10)',
-    'P>150','P>200','150>200','200↑','50>150','50>200','P>50','<25%H','>30%L','RS≥70',
+    ...Object.values(criteriaShort),
   ];
   const esc = v => {
     if (v == null) return '';
