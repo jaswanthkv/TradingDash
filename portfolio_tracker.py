@@ -76,34 +76,44 @@ def _compute_top20(get_prices=None) -> list[str]:
 
 # ── Prices ───────────────────────────────────────────────────────────────────
 
-def _get_current_prices(symbols: list[str], get_prices=None):
+def _get_current_prices(symbols: list[str], get_prices=None, fresh: bool = False):
     """Latest close for each bare NSE symbol + the 3 benchmarks, the trading-day
     date implied by that data (so weekend page-loads don't create a duplicate
-    snapshot), and each ticker's day-over-day % change vs the previous close —
-    already in the downloaded frame, so this costs nothing extra to fetch.
+    snapshot), each ticker's day-over-day % change vs the previous close, and
+    today's open per symbol (for rebalance execution — see open_prices below)
+    — all already in the downloaded frame, so this costs nothing extra to fetch.
 
     `get_prices` overrides the price-fetch call — pass a fake in tests instead
-    of hitting yfinance. Defaults to strategy.download_data."""
+    of hitting yfinance. Defaults to strategy.download_data. `fresh=True`
+    bypasses the same-day cache — use when the day's first fetch may have
+    caught incomplete data (e.g. run right at/before market open)."""
     get_prices = get_prices or st.download_data
     tickers = sorted({f"{s}.NS" for s in symbols} | set(PORTFOLIO_BENCHMARKS.values()))
-    close, _ = get_prices(
-        tickers, years=1, benchmark=PORTFOLIO_BENCHMARKS["nifty500"], use_cache=True)
-    if close.empty:
+    raw_close, _, raw_open = get_prices(
+        tickers, years=1, benchmark=PORTFOLIO_BENCHMARKS["nifty500"],
+        include_open=True, use_cache=not fresh)
+    if raw_close.empty:
         raise RuntimeError("No price data returned for portfolio tracking")
-    # yfinance occasionally drops an isolated bar for a thin-liquidity stock (a
+    # For the *displayed* price, forward-fill an isolated missing bar (a
     # transient feed gap, not a real halt) — same ffill(limit=5) minervini.py
-    # uses for SMA continuity, so one missing day doesn't blank out day_change.
-    close = close.ffill(limit=5)
+    # uses for SMA continuity. Day-change, below, deliberately uses the RAW
+    # (pre-ffill) series instead — a forward-filled gap must never be reported
+    # as a false 0% change.
+    close = raw_close.ffill(limit=5)
 
     last  = close.iloc[-1]
-    prev  = close.iloc[-2] if len(close) >= 2 else None
     as_of = str(close.index[-1].date())
 
     def _day_change(ticker: str) -> float | None:
-        if prev is None or ticker not in prev.index or ticker not in last.index:
+        """This ticker's own last two valid (non-NaN) RAW closes, not fixed
+        calendar positions — so a forward-filled gap can't read as 0% change."""
+        if ticker not in raw_close.columns:
             return None
-        p0, p1 = prev[ticker], last[ticker]
-        if pd.isna(p0) or pd.isna(p1) or p0 == 0:
+        col = raw_close[ticker].dropna()
+        if len(col) < 2:
+            return None
+        p0, p1 = float(col.iloc[-2]), float(col.iloc[-1])
+        if p0 == 0:
             return None
         return round((p1 / p0 - 1) * 100, 2)
 
@@ -122,7 +132,14 @@ def _get_current_prices(symbols: list[str], get_prices=None):
         if chg is not None:
             day_change[name] = chg
 
-    return prices, bench, as_of, day_change
+    # Today's open, per symbol — rebalance() executes at this, not `prices`
+    # (the latest close), so a rebalance run mid-session doesn't depend on
+    # what time of day it happened to run.
+    open_last = raw_open.iloc[-1] if len(raw_open) else pd.Series(dtype=float)
+    open_prices = {s: float(open_last[f"{s}.NS"]) for s in symbols
+                   if f"{s}.NS" in open_last.index and pd.notna(open_last[f"{s}.NS"])}
+
+    return prices, bench, as_of, day_change, open_prices
 
 
 # ── Rebalance / snapshot ─────────────────────────────────────────────────────
@@ -147,31 +164,45 @@ def _portfolio_value(state: dict, prices: dict[str, float]) -> float:
     return value
 
 
-def rebalance(state: dict, top20: list[str], prices: dict[str, float], today: str) -> dict:
+def rebalance(state: dict, top20: list[str], open_prices: dict[str, float], today: str) -> dict:
     """Full liquidate + equal-weight re-buy into the current Top 20. Simplified
     on purpose — a paper journal doesn't need partial-position rebalancing math,
-    and full reallocation is what "rebalance to the current Top 20" means here."""
-    prev_symbols = set(state["holdings"].keys())
-    total_value  = _portfolio_value(state, prices)
+    and full reallocation is what "rebalance to the current Top 20" means here.
 
-    priced_top20 = [s for s in top20 if s in prices]
+    Priced at today's OPEN, not the latest close — a systematic rule decided
+    from yesterday's screen would actually execute at today's open, and using
+    open makes the fill price deterministic regardless of what time of day
+    ensure_today() happens to run (the latest "close" during market hours is
+    really just whatever price yfinance had live at call time, which drifts
+    all session). Both legs of the liquidate+rebuy use the same open prices,
+    consistent with both happening the same session.
+
+    A stock that stays in the Top 20 across a rebalance keeps its original
+    avg_cost (only its qty is resized to the new equal weight) — otherwise the
+    P&L column would reset to 0% for the whole portfolio every single week."""
+    prev_holdings = state["holdings"]
+    total_value   = _portfolio_value(state, open_prices)
+
+    priced_top20 = [s for s in top20 if s in open_prices]
     new_holdings = {}
     if priced_top20:
         per_stock = total_value / len(priced_top20)
         for sym in priced_top20:
-            qty = int(per_stock // prices[sym])
+            qty = int(per_stock // open_prices[sym])
             if qty > 0:
-                new_holdings[sym] = {"qty": qty, "avg_cost": round(prices[sym], 2)}
+                avg_cost = prev_holdings[sym]["avg_cost"] if sym in prev_holdings \
+                           else round(open_prices[sym], 2)
+                new_holdings[sym] = {"qty": qty, "avg_cost": avg_cost}
 
-    spent = sum(pos["qty"] * prices[sym] for sym, pos in new_holdings.items())
+    spent = sum(pos["qty"] * open_prices[sym] for sym, pos in new_holdings.items())
     state["holdings"]            = new_holdings
     state["cash"]                = round(total_value - spent, 2)
     state["last_rebalance_date"] = today
     if not state["inception_date"]:
         state["inception_date"] = today
 
-    added   = sorted(set(new_holdings) - prev_symbols)
-    removed = sorted(prev_symbols - set(new_holdings))
+    added   = sorted(set(new_holdings) - set(prev_holdings))
+    removed = sorted(set(prev_holdings) - set(new_holdings))
     state["rebalance_log"].append({"date": today, "added": added, "removed": removed})
     return state
 
@@ -186,19 +217,20 @@ def snapshot_nav(state: dict, prices: dict[str, float], bench: dict[str, float],
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-def ensure_today() -> tuple[dict, dict, dict]:
+def ensure_today(fresh: bool = False) -> tuple[dict, dict, dict]:
     """Rebalance if a new ISO week has started, record today's NAV if not
     already done, persist, and return (state, current_prices, day_change) —
     current_prices/day_change let the caller show live P&L/weight/today's-move
-    per holding without a second fetch."""
+    per holding without a second fetch. `fresh=True` bypasses the same-day
+    price cache."""
     state = load_state()
     top20 = _compute_top20()
 
     symbols_needed = sorted(set(top20) | set(state["holdings"].keys()))
-    prices, bench, today, day_change = _get_current_prices(symbols_needed)
+    prices, bench, today, day_change, open_prices = _get_current_prices(symbols_needed, fresh=fresh)
 
     if needs_rebalance(state, today) and top20:
-        state = rebalance(state, top20, prices, today)
+        state = rebalance(state, top20, open_prices, today)
 
     state = snapshot_nav(state, prices, bench, today)
     save_state(state)

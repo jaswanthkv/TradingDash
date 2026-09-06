@@ -223,36 +223,39 @@ def _price_cache_key(tickers, benchmark, years) -> str:
 
 
 def _load_price_cache(key: str):
-    """Return cached (close, volume, high, low) if cached TODAY, else None.
-    Same-day reuse makes re-runs identical (deterministic) and instant, and
-    avoids re-hammering yfinance."""
+    """Return cached (close, volume, high, low, open) if cached TODAY, else
+    None. Same-day reuse makes re-runs identical (deterministic) and instant,
+    and avoids re-hammering yfinance. A cache blob from before `open` was
+    added is treated as a miss (safe self-heal, not a crash)."""
     path = os.path.join(_PRICE_CACHE_DIR, f"{key}.pkl")
     try:
         with open(path, "rb") as f:
             blob = pickle.load(f)
-        if blob.get("date") == date.today().isoformat():
-            return blob["close"], blob["volume"], blob["high"], blob["low"]
+        if blob.get("date") == date.today().isoformat() and "open" in blob:
+            return blob["close"], blob["volume"], blob["high"], blob["low"], blob["open"]
     except Exception:
         pass
     return None
 
 
-def _save_price_cache(key: str, close, volume, high, low):
+def _save_price_cache(key: str, close, volume, high, low, open_):
     try:
         os.makedirs(_PRICE_CACHE_DIR, exist_ok=True)
         with open(os.path.join(_PRICE_CACHE_DIR, f"{key}.pkl"), "wb") as f:
             pickle.dump({"date": date.today().isoformat(), "close": close,
-                         "volume": volume, "high": high, "low": low}, f)
+                         "volume": volume, "high": high, "low": low, "open": open_}, f)
     except Exception:
         pass
 
 
 def download_data(tickers: list[str], years: int = 5,
-                  include_hl: bool = False, benchmark: str | None = None,
+                  include_hl: bool = False, include_open: bool = False,
+                  benchmark: str | None = None,
                   progress_cb=None, use_cache: bool = True):
     """
     Download daily OHLCV for all tickers + benchmark.
-    Returns (close, volume) by default; (close, volume, high, low) when include_hl=True.
+    Returns (close, volume) by default; add high/low with include_hl=True and/or
+    today's open with include_open=True — (close, volume, [high, low], [open]).
     Batched to avoid yfinance rate limiting; benchmark fetched first.
     progress_cb(done_batches, total_batches, msg) is called as batches complete.
     """
@@ -266,8 +269,14 @@ def download_data(tickers: list[str], years: int = 5,
     cached = _load_price_cache(cache_key) if use_cache else None
     if cached is not None:
         _dlp(1, 1, "Loaded prices from today's cache")
-        close, volume, high, low = cached
-        return (close, volume, high, low) if include_hl else (close, volume)
+        close, volume, high, low, open_ = cached
+        if include_hl and include_open:
+            return close, volume, high, low, open_
+        if include_hl:
+            return close, volume, high, low
+        if include_open:
+            return close, volume, open_
+        return close, volume
 
     warmup = int(years * 365) + 430
     start  = (date.today() - timedelta(days=warmup)).strftime("%Y-%m-%d")
@@ -279,19 +288,21 @@ def download_data(tickers: list[str], years: int = 5,
             v = raw["Volume"].copy()
             h = raw["High"].copy()  if "High"  in raw.columns.get_level_values(0) else pd.DataFrame()
             l = raw["Low"].copy()   if "Low"   in raw.columns.get_level_values(0) else pd.DataFrame()
+            o = raw["Open"].copy()  if "Open"  in raw.columns.get_level_values(0) else pd.DataFrame()
         else:
             c = raw[["Close"]].copy()
             v = raw[["Volume"]].copy()
             h = raw[["High"]].copy()  if "High"  in raw.columns else pd.DataFrame()
             l = raw[["Low"]].copy()   if "Low"   in raw.columns else pd.DataFrame()
-        return c, v, h, l
+            o = raw[["Open"]].copy()  if "Open"  in raw.columns else pd.DataFrame()
+        return c, v, h, l, o
 
     # Benchmark first, retry once if rate-limited
     _dlp(0, 1, f"Downloading benchmark {benchmark} …")
-    close_bench, vol_bench, high_bench, low_bench = None, None, pd.DataFrame(), pd.DataFrame()
+    close_bench, vol_bench, high_bench, low_bench, open_bench = None, None, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     for attempt in range(2):
         try:
-            close_bench, vol_bench, high_bench, low_bench = _fetch([benchmark])
+            close_bench, vol_bench, high_bench, low_bench, open_bench = _fetch([benchmark])
             if not close_bench.empty:
                 break
         except Exception:
@@ -306,6 +317,7 @@ def download_data(tickers: list[str], years: int = 5,
     volume_frames = [vol_bench]
     high_frames   = [high_bench]
     low_frames    = [low_bench]
+    open_frames   = [open_bench]
     failed_batches = []
     for idx, batch in enumerate(batches):
         if idx > 0:
@@ -317,12 +329,13 @@ def download_data(tickers: list[str], years: int = 5,
         got = False
         for attempt in range(3):
             try:
-                c, v, h, l = _fetch(batch)
+                c, v, h, l, o = _fetch(batch)
                 if not c.empty:
                     close_frames.append(c)
                     volume_frames.append(v)
                     high_frames.append(h)
                     low_frames.append(l)
+                    open_frames.append(o)
                     got = True
                     break
             except Exception:
@@ -353,20 +366,30 @@ def download_data(tickers: list[str], years: int = 5,
         close[benchmark] = keep_bench[benchmark]
     volume = volume.reindex(columns=close.columns).fillna(0)
 
-    # Always build high/low so the cached panel is complete regardless of caller.
+    # Always build high/low/open so the cached panel is complete regardless of caller.
     high = pd.concat(high_frames, axis=1)
     low  = pd.concat(low_frames,  axis=1)
+    open_ = pd.concat(open_frames, axis=1)
     high = high.loc[:, ~high.columns.duplicated()]
     low  = low.loc[:,  ~low.columns.duplicated()]
-    high.index = pd.to_datetime(high.index).tz_localize(None)
-    low.index  = pd.to_datetime(low.index).tz_localize(None)
-    high = high.reindex(columns=close.columns)
-    low  = low.reindex(columns=close.columns)
+    open_ = open_.loc[:, ~open_.columns.duplicated()]
+    high.index  = pd.to_datetime(high.index).tz_localize(None)
+    low.index   = pd.to_datetime(low.index).tz_localize(None)
+    open_.index = pd.to_datetime(open_.index).tz_localize(None)
+    high  = high.reindex(columns=close.columns)
+    low   = low.reindex(columns=close.columns)
+    open_ = open_.reindex(columns=close.columns)
 
     # Cache only a reasonably-complete download (don't persist a run badly
     # truncated by rate-limiting).
     if not failed_batches:
-        _save_price_cache(cache_key, close, volume, high, low)
+        _save_price_cache(cache_key, close, volume, high, low, open_)
 
-    return (close, volume, high, low) if include_hl else (close, volume)
+    if include_hl and include_open:
+        return close, volume, high, low, open_
+    if include_hl:
+        return close, volume, high, low
+    if include_open:
+        return close, volume, open_
+    return close, volume
 

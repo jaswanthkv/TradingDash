@@ -7,6 +7,9 @@ Endpoints:
   GET  /api/screener            — live SEPA screener (market=india|us, fresh=bool)
 
   GET  /api/portfolio           — SEPA Top 20 paper-trading journal vs Nifty 50/500/Midcap 150
+
+  GET  /api/live/preview        — real-money rebalance plan via Dhan (read-only)
+  POST /api/live/execute        — places the previewed orders via Dhan (real money)
 """
 import asyncio
 import os
@@ -84,10 +87,11 @@ _portfolio_running = False
 
 
 @app.get("/api/portfolio")
-async def portfolio():
+async def portfolio(fresh: bool = False):
     """Rebalances (weekly, if due) and records today's NAV snapshot on demand —
     no background thread. Safe to call repeatedly; a no-op after the first
-    successful call on a given trading day."""
+    successful call on a given trading day. fresh=true bypasses the same-day
+    price cache — use if the day's first fetch may have caught incomplete data."""
     global _portfolio_running
     if _portfolio_running:
         raise HTTPException(409, "Portfolio already updating")
@@ -97,13 +101,59 @@ async def portfolio():
         global _portfolio_running
         _portfolio_running = True
         try:
-            return pt.ensure_today()
+            return pt.ensure_today(fresh=fresh)
         finally:
             _portfolio_running = False
 
     loop = asyncio.get_event_loop()
     state, prices, day_change = await loop.run_in_executor(_executor, _run)
     return {**state, "current_prices": prices, "day_change": day_change}
+
+
+# ── SEPA Top 20 live trading (real money, via Dhan) ─────────────────────────────
+
+_live_running = False
+
+
+async def _run_live(fn):
+    """Shared single-flight lock + Dhan-error-to-HTTP mapping for the two
+    live-trading endpoints below."""
+    global _live_running
+    if _live_running:
+        raise HTTPException(409, "Live rebalance already running")
+    from dhan_client import DhanAPIError
+
+    def _run():
+        global _live_running
+        _live_running = True
+        try:
+            return fn()
+        finally:
+            _live_running = False
+
+    loop = asyncio.get_event_loop()
+    try:
+        return await loop.run_in_executor(_executor, _run)
+    except DhanAPIError as e:
+        raise HTTPException(502 if e.status == 0 else e.status, e.detail)
+
+
+@app.get("/api/live/preview")
+async def live_preview():
+    """Compute the buy/sell orders needed to move real Dhan holdings to the
+    current Top 20 — read-only, sends nothing to Dhan except holdings/funds/
+    LTP lookups. Review this before calling /api/live/execute."""
+    import live_trading as lt
+    return await _run_live(lt.plan_rebalance)
+
+
+@app.post("/api/live/execute")
+async def live_execute():
+    """Recomputes the rebalance plan fresh (never trusts a client-supplied
+    order list) and places real orders via Dhan. Call /api/live/preview first
+    to review what this will do."""
+    import live_trading as lt
+    return await _run_live(lt.execute_rebalance)
 
 
 @app.get("/", response_class=HTMLResponse)

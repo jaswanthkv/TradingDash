@@ -497,7 +497,10 @@ html{scroll-behavior:smooth}
 <div class="tab-pane" id="tab-portfolio">
   <div class="param-row" style="justify-content:space-between">
     <span style="font-size:11px;color:var(--t3)" id="pfMeta">SEPA Top 20 · paper-trading journal · weekly rebalance</span>
-    <button class="btn btn-ghost btn-sm" onclick="loadPortfolio()">↺ Refresh</button>
+    <span>
+      <button class="btn btn-ghost btn-sm" onclick="loadPortfolio()">↺ Refresh</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadPortfolio(true)" title="Bypass today's price cache — use if today's % looks stuck/wrong">↻ Refresh (live)</button>
+    </span>
   </div>
 
   <div id="pfEmpty" class="page hidden">
@@ -877,14 +880,14 @@ function renderScreen() {
 let _pfChart = null;
 let _pfLoading = false;
 
-async function loadPortfolio() {
+async function loadPortfolio(fresh = false) {
   if (_pfLoading) return;
   _pfLoading = true;
   hide('pfEmpty'); hide('pfResults'); show('pfLoading');
   try {
-    const res = await fetch(API + '/api/portfolio');
+    const res = await fetch(API + '/api/portfolio' + (fresh ? '?fresh=true' : ''));
     if (res.status === 409) {
-      setTimeout(() => { _pfLoading = false; loadPortfolio(); }, 3000);
+      setTimeout(() => { _pfLoading = false; loadPortfolio(fresh); }, 3000);
       return;
     }
     if (!res.ok) throw new Error(await res.text());

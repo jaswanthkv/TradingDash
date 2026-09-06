@@ -18,3 +18,8 @@ UNIVERSE_CSV = os.environ.get(
     os.path.expanduser("~/Downloads/ind_niftymicrocap250_list.csv")
 )
 UNIVERSE_CSV_2 = os.environ.get("UNIVERSE_CSV_2", "")
+
+# Dhan broker API — only needed for /api/live/* real-money endpoints.
+# Order placement requires a static IP whitelisted with Dhan.
+DHAN_CLIENT_ID    = os.environ.get("DHAN_CLIENT_ID", "")
+DHAN_ACCESS_TOKEN = os.environ.get("DHAN_ACCESS_TOKEN", "")
